@@ -591,4 +591,41 @@
     background-color: rgba(167, 243, 208, 0.1);
     color: var(--color-mint);
   }
+
+  /* Welcome Splash Screen animations and classes */
+  .splash-bg {
+    background: radial-gradient(circle at 10% 20%, rgba(245, 198, 208, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(196, 181, 224, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, rgba(147, 197, 253, 0.12) 0%, transparent 50%);
+    backdrop-filter: blur(20px);
+  }
+  .dark .splash-bg {
+    background: radial-gradient(circle at 15% 15%, rgba(196, 181, 224, 0.1) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(147, 197, 253, 0.08) 0%, transparent 45%),
+                var(--color-dark-bg);
+  }
+
+  .floating-orb-1 {
+    animation: floatOrb1 15s infinite ease-in-out;
+  }
+  .floating-orb-2 {
+    animation: floatOrb2 20s infinite ease-in-out;
+  }
+
+  @keyframes floatOrb1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-30px, 40px) scale(1.2); }
+  }
+  @keyframes floatOrb2 {
+    0%, 100% { transform: translate(0, 0) scale(1.2); }
+    50% { transform: translate(40px, -30px) scale(0.9); }
+  }
+
+  .splash-fade-in {
+    animation: splashFadeIn 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  @keyframes splashFadeIn {
+    from { opacity: 0; transform: scale(0.96) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
 }

@@ -13,10 +13,45 @@ const NAV_ITEMS = [
   { to: '/app/settings', label: 'Settings', icon: Settings, end: false },
 ];
 
+const GENTLE_MESSAGES = [
+  { text: "Take a deep breath. You are doing so much better than you give yourself credit for. 🌸", tag: "Mindful Reminder" },
+  { text: "Remember: even on your busy days, resting is still progress. Go easy on yourself today. ✨", tag: "Friendly Reminder" },
+  { text: "You don't have to carry it all today. Just take one little step at a time. 🐢", tag: "Warm Hug" },
+  { text: "A beautiful day begins with a calm, peaceful mind. Let's create something serene today. 🌅", tag: "Mindful Thought" },
+  { text: "Your value isn't measured by how much you do. You are enough just as you are. 💖", tag: "Self-Care" },
+  { text: "Drink some water, relax your shoulders, and unclench your jaw. You've got this. 💧", tag: "Body Check-in" },
+  { text: "May today bring you small pockets of unexpected joy and peaceful moments. ☕", tag: "Daily Wish" },
+  { text: "Perfect is overrated. Done and kind to yourself is the goal. 🎨", tag: "Gentle Reminder" },
+  { text: "Even the tallest trees started as tiny seeds. Growth takes time. 🌱", tag: "Nature's Wisdom" }
+];
+
 export const AppLayout: React.FC = () => {
   const signOut = useAuthStore((s) => s.signOut);
   const navigate = useNavigate();
   const { settings, loading } = useUserSettings();
+
+  const [showWelcome, setShowWelcome] = React.useState(() => {
+    return !sessionStorage.getItem('dayplanner_welcome_shown');
+  });
+
+  const [currentMessage] = React.useState(() => {
+    const idx = Math.floor(Math.random() * GENTLE_MESSAGES.length);
+    return GENTLE_MESSAGES[idx];
+  });
+
+  const handleEnter = () => {
+    sessionStorage.setItem('dayplanner_welcome_shown', 'true');
+    setShowWelcome(false);
+  };
+
+  React.useEffect(() => {
+    if (showWelcome) {
+      const timer = setTimeout(() => {
+        handleEnter();
+      }, 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [showWelcome]);
 
   // Initialize browser notification reminders
   useNotificationReminders();
@@ -33,6 +68,46 @@ export const AppLayout: React.FC = () => {
     await signOut();
     navigate('/login');
   };
+
+  if (showWelcome) {
+    const userName = settings?.display_name || '';
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-cream dark:bg-dark-bg splash-bg select-none transition-all duration-700">
+        {/* Floating gradient decorative orbs */}
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-pink-soft/10 dark:bg-pink-soft/5 blur-[80px] floating-orb-1 pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-lavender/10 dark:bg-lavender/5 blur-[80px] floating-orb-2 pointer-events-none" />
+
+        <div className="max-w-md w-full mx-4 text-center splash-fade-in px-6 py-10 rounded-[32px] border border-border/40 dark:border-dark-border/40 bg-surface/60 dark:bg-dark-surface/40 backdrop-blur-xl shadow-2xl relative">
+          {/* Logo / Icon */}
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-lavender/20 dark:bg-lavender/10 flex items-center justify-center text-3xl animate-pulse">
+              🌸
+            </div>
+          </div>
+
+          <h2 className="text-2xl md:text-3xl font-extrabold text-text-primary dark:text-dark-text tracking-tight mb-2">
+            {userName ? `Welcome back, ${userName}` : 'A Moment of Peace'}
+          </h2>
+          
+          <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-lavender-light dark:bg-lavender-dark/20 text-lavender-dark dark:text-lavender mb-6">
+            {currentMessage.tag}
+          </span>
+
+          <p className="text-lg md:text-xl font-medium text-text-secondary dark:text-dark-text-secondary leading-relaxed italic mb-8 px-2">
+            "{currentMessage.text}"
+          </p>
+
+          <button
+            onClick={handleEnter}
+            className="w-full py-3.5 px-6 rounded-2xl bg-lavender-dark dark:bg-lavender text-white dark:text-dark-bg font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            <span>Enter My Space</span>
+            <Sparkles size={18} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-cream dark:bg-dark-bg transition-colors duration-300">
