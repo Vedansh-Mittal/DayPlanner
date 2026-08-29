@@ -1,0 +1,17 @@
+{
+  "short_name": "Daylight",
+  "name": "Daylight Planner",
+  "description": "A calm, private daily planner for morning and evening reflections, mood tracking, and personal insights.",
+  "start_url": "/",
+  "background_color": "#121214",
+  "theme_color": "#818cf8",
+  "display": "standalone",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ]
+}

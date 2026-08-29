@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#818cf8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c084fc;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#grad)" />
+  <!-- Overlapping Sun & Moon -->
+  <circle cx="210" cy="256" r="75" fill="#ffffff" />
+  <circle cx="302" cy="256" r="75" fill="#1e1b4b" />
+  <path d="M 270 200 A 75 75 0 0 0 310 300 A 65 65 0 0 1 270 200 Z" fill="#ffffff" opacity="0.95" />
+</svg>
