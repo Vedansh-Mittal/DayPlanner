@@ -1,0 +1,278 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/auth-store';
+import {
+  format, startOfMonth, endOfMonth, eachDayOfInterval,
+  getDay, addMonths, subMonths, isSameDay, parse, isToday,
+} from 'date-fns';
+import { MOOD_COLOR_MAP, type MoodOption, type SearchResult } from '../types/database';
+import { isMorningComplete, isMorningStarted, isNightComplete, isNightStarted, truncate, extractSnippet } from '../lib/utils';
+import {
+  ChevronLeft, ChevronRight, Search, Calendar, X,
+  Sun as SunIcon, Moon, StickyNote, Loader2,
+} from 'lucide-react';
+
+export const HistoryPage: React.FC = () => {
+  const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [calendarData, setCalendarData] = useState<Record<string, any>>({});
+  const [loadingCal, setLoadingCal] = useState(true);
+
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  // Load calendar data for current month
+  const loadCalendar = useCallback(async () => {
+    if (!user) return;
+    setLoadingCal(true);
+    const monthStart = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+    const monthEnd = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
+
+    const { data } = await supabase
+      .from('daily_entries')
+      .select('*, priorities(*), action_steps(*), meals(*), wind_down_items(*)')
+      .eq('user_id', user.id)
+      .gte('entry_date', monthStart)
+      .lte('entry_date', monthEnd);
+
+    const map: Record<string, any> = {};
+    (data || []).forEach((e: any) => {
+      map[e.entry_date] = e;
+    });
+    setCalendarData(map);
+    setLoadingCal(false);
+  }, [user, currentMonth]);
+
+  useEffect(() => { loadCalendar(); }, [loadCalendar]);
+
+  // Search
+  const handleSearch = async () => {
+    if (!searchQuery.trim() || !user) return;
+    setSearching(true);
+    setHasSearched(true);
+
+    const { data, error } = await supabase.rpc('search_entries', {
+      search_query: searchQuery.trim(),
+    });
+
+    if (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    } else {
+      setSearchResults(data || []);
+    }
+    setSearching(false);
+  };
+
+  // Calendar rendering
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(currentMonth);
+  const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const startDay = getDay(monthStart); // 0=Sun
+
+  const navigateToDate = (dateStr: string) => {
+    navigate(`/app?date=${dateStr}`);
+  };
+
+  return (
+    <div className="space-y-8">
+      <h1 className="text-2xl font-extrabold text-text-primary dark:text-dark-text">
+        <Calendar size={24} className="inline mr-2 text-lavender" />
+        History
+      </h1>
+
+      {/* Search */}
+      <div className="card">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input
+              type="text"
+              className="input-field pl-9"
+              placeholder="Search notes, priorities, reflections…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            />
+            {searchQuery && (
+              <button
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                onClick={() => { setSearchQuery(''); setHasSearched(false); setSearchResults([]); }}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          <button className="btn-primary px-4" onClick={handleSearch} disabled={searching}>
+            {searching ? <Loader2 size={16} className="animate-spin" /> : 'Search'}
+          </button>
+        </div>
+
+        {/* Search results */}
+        {hasSearched && (
+          <div className="mt-4 space-y-3">
+            {searching ? (
+              <div className="text-center py-6 text-text-muted">
+                <Loader2 size={20} className="animate-spin mx-auto mb-2" />
+                Searching…
+              </div>
+            ) : searchResults.length === 0 ? (
+              <div className="text-center py-6 text-text-muted dark:text-dark-text-muted">
+                <Search size={24} className="mx-auto mb-2 opacity-40" />
+                <p>No results found for "{searchQuery}"</p>
+                <p className="text-xs mt-1">Try different keywords or check spelling</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
+                  {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
+                </p>
+                {searchResults.map((r, i) => (
+                  <button
+                    key={`${r.entry_id}-${r.match_source}-${i}`}
+                    className="card card-hover w-full text-left p-4"
+                    onClick={() => navigateToDate(r.entry_date)}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-sm">
+                        {format(parse(r.entry_date, 'yyyy-MM-dd', new Date()), 'EEEE, MMM d')}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {r.morning_mood && (
+                          <span className="text-xs px-2 py-0.5 rounded-full" style={{
+                            backgroundColor: MOOD_COLOR_MAP[r.morning_mood as MoodOption] || 'var(--color-cream-dark)',
+                          }}>☀️ {r.morning_mood}</span>
+                        )}
+                        {r.morning_completed && <SunIcon size={14} className="text-lavender" />}
+                        {r.night_completed && <Moon size={14} className="text-blue-soft" />}
+                      </div>
+                    </div>
+                    <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
+                      <span className="text-xs font-semibold text-text-muted uppercase mr-1">{r.match_source}:</span>
+                      {extractSnippet(r.matched_text, searchQuery)}
+                    </p>
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Calendar */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <button className="btn-ghost" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+            <ChevronLeft size={20} />
+          </button>
+          <h2 className="text-lg font-bold">{format(currentMonth, 'MMMM yyyy')}</h2>
+          <button className="btn-ghost" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+            <ChevronRight size={20} />
+          </button>
+        </div>
+
+        {/* Day labels */}
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+            <div key={d} className="text-center text-xs font-bold text-text-muted dark:text-dark-text-muted py-1">
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar grid */}
+        <div className="grid grid-cols-7 gap-1">
+          {/* Empty cells for start */}
+          {Array.from({ length: startDay }, (_, i) => (
+            <div key={`empty-${i}`} className="aspect-square" />
+          ))}
+
+          {days.map((day) => {
+            const dateStr = format(day, 'yyyy-MM-dd');
+            const todayStr = format(new Date(), 'yyyy-MM-dd');
+            const isFutureDate = dateStr > todayStr;
+            const data = calendarData[dateStr];
+            const todayClass = isToday(day) ? 'today' : '';
+            const moodColor = data?.morning_mood
+              ? MOOD_COLOR_MAP[data.morning_mood as MoodOption]
+              : data?.night_mood
+              ? MOOD_COLOR_MAP[data.night_mood as MoodOption]
+              : undefined;
+
+            const snippet = data
+              ? data.daily_note ||
+                data.morning_why ||
+                data.night_win ||
+                data.morning_brain_dump ||
+                (data.priorities && data.priorities[0]?.text) ||
+                data.night_gratitude_1 ||
+                ''
+              : '';
+
+            const isMorningDone = data
+              ? data.morning_completed || isMorningComplete(data, data.priorities || [], data.action_steps || [])
+              : false;
+            const isNightDone = data
+              ? data.night_completed || isNightComplete(data, data.meals || [], data.wind_down_items || [])
+              : false;
+            const isFullDone = isMorningDone && isNightDone;
+            const isPartialDone = data
+              ? isMorningDone ||
+                isNightDone ||
+                isMorningStarted(data, data.priorities || [], data.action_steps || []) ||
+                isNightStarted(data, data.meals || [], data.wind_down_items || []) ||
+                !!data.daily_note
+              : false;
+
+            return (
+              <button
+                key={dateStr}
+                className={`cal-day min-h-[64px] p-1 flex flex-col items-center justify-between overflow-hidden transition-all ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : ''}`}
+                onClick={() => !isFutureDate && navigateToDate(dateStr)}
+                disabled={isFutureDate}
+                title={isFutureDate ? 'Future date locked' : undefined}
+                style={moodColor ? { backgroundColor: `${moodColor}22` } : undefined}
+              >
+                <div className="flex items-center justify-between w-full px-1">
+                  <span className="font-bold text-xs">{format(day, 'd')}</span>
+                  {isFutureDate ? (
+                    <span className="text-[10px] opacity-60">🔒</span>
+                  ) : isFullDone ? (
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900/40" title="Fully Completed" />
+                  ) : isPartialDone ? (
+                    <div className="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-200 dark:ring-amber-900/40" title="Partially Completed" />
+                  ) : null}
+                </div>
+
+                {/* Text snippet preview */}
+                {snippet && !isFutureDate && (
+                  <span className="text-[10px] leading-tight font-medium text-text-secondary dark:text-dark-text-secondary truncate w-full text-center px-0.5 opacity-90">
+                    {truncate(snippet, 12)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        <div className="flex justify-center gap-6 mt-4 text-xs font-medium text-text-muted dark:text-dark-text-muted">
+          <span className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Fully Completed
+          </span>
+          <span className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Partially Left
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-xs opacity-60">🔒</span> Future Date Locked
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
