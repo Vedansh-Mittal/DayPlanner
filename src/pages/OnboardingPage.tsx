@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserSettings } from '../hooks/useUserSettings';
+import { useAuthStore } from '../stores/auth-store';
 import { getAllTimezones } from '../lib/utils';
 import { Sun, Globe, Clock, Droplets, Bell, ArrowRight, Loader2 } from 'lucide-react';
+import { subscribeToPush, unsubscribeFromPush } from '../lib/push';
 
 const timezones = getAllTimezones();
 
 export const OnboardingPage: React.FC = () => {
   const navigate = useNavigate();
   const { completeOnboarding } = useUserSettings();
+  const user = useAuthStore((s) => s.user);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +23,7 @@ export const OnboardingPage: React.FC = () => {
   const [morningReminder, setMorningReminder] = useState('08:00');
   const [nightReminder, setNightReminder] = useState('21:00');
   const [waterGoal, setWaterGoal] = useState(8);
-  const [emailReminders, setEmailReminders] = useState(false);
+  const [pushRemindersEnabled, setPushRemindersEnabled] = useState(false);
 
   const filteredTz = tzSearch
     ? timezones.filter((tz) => tz.toLowerCase().includes(tzSearch.toLowerCase()))
@@ -36,7 +39,7 @@ export const OnboardingPage: React.FC = () => {
         morning_reminder: morningReminder,
         night_reminder: nightReminder,
         water_goal: waterGoal,
-        email_reminders: emailReminders,
+        push_reminders_enabled: pushRemindersEnabled,
       });
       navigate('/app', { replace: true });
     } catch (err: any) {
@@ -169,16 +172,33 @@ export const OnboardingPage: React.FC = () => {
         <input
           type="checkbox"
           className="checkbox-custom"
-          checked={emailReminders}
-          onChange={(e) => setEmailReminders(e.target.checked)}
+          checked={pushRemindersEnabled}
+          onChange={async (e) => {
+            const checked = e.target.checked;
+            if (checked) {
+              if (!user) return;
+              const granted = await subscribeToPush(user.id);
+              if (granted) {
+                setPushRemindersEnabled(true);
+              } else {
+                alert('Push notification permission was denied. Please enable notifications in your browser settings.');
+                setPushRemindersEnabled(false);
+              }
+            } else {
+              if (user) {
+                await unsubscribeFromPush(user.id);
+              }
+              setPushRemindersEnabled(false);
+            }
+          }}
         />
         <div>
           <span className="text-sm font-semibold flex items-center gap-1.5">
             <Bell size={14} />
-            Email reminders
+            Push notifications
           </span>
           <p className="text-xs text-text-muted dark:text-dark-text-muted">
-            Receive morning and night reminder emails
+            Receive morning check-ins and night reflection reminders directly on this device
           </p>
         </div>
       </label>

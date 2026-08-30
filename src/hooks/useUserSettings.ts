@@ -67,6 +67,7 @@ export function useUserSettings() {
       night_reminder: initial.night_reminder || null,
       water_goal: initial.water_goal ?? 8,
       email_reminders: initial.email_reminders ?? false,
+      push_reminders_enabled: initial.push_reminders_enabled ?? false,
       theme: 'system',
       onboarding_complete: true,
     };
