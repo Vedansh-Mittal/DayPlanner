@@ -33,10 +33,10 @@ export const AppLayout: React.FC = () => {
   const { settings, loading } = useUserSettings();
 
   React.useEffect(() => {
-    if (user && settings?.push_reminders_enabled) {
+    if (user) {
       initOneSignalQuietly(user.id);
     }
-  }, [user, settings?.push_reminders_enabled]);
+  }, [user]);
 
   const [showWelcome, setShowWelcome] = React.useState(() => {
     return !sessionStorage.getItem('dayplanner_welcome_shown');

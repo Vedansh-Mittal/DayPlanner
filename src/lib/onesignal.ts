@@ -27,12 +27,29 @@ export function initOneSignalQuietly(userId: string) {
 }
 
 /** Explicitly prompt the user for push notification permission */
-export function requestOneSignalPushPermission(userId: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (typeof window === 'undefined') {
-      resolve(false);
-      return;
+export async function requestOneSignalPushPermission(userId: string): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
+  const OneSignal = window.OneSignal;
+  // If OneSignal is already initialized and loaded, invoke requestPermission synchronously to preserve user-gesture
+  if (OneSignal && typeof OneSignal.Notifications?.requestPermission === 'function') {
+    try {
+      if (userId) {
+        await OneSignal.login(userId);
+      }
+      await OneSignal.Notifications.requestPermission();
+      const hasPermission = OneSignal.Notifications.permission;
+      if (hasPermission) {
+        await OneSignal.User.pushSubscription.optIn();
+      }
+      return hasPermission;
+    } catch (err) {
+      console.error('Direct OneSignal permission request failed:', err);
     }
+  }
+
+  // Fallback to queue if not fully loaded/initialized yet
+  return new Promise((resolve) => {
     window.OneSignal = window.OneSignal || [];
     window.OneSignal.push(async function() {
       try {
@@ -46,10 +63,8 @@ export function requestOneSignalPushPermission(userId: string): Promise<boolean>
           await window.OneSignal.login(userId);
         }
 
-        // Request permission
         await window.OneSignal.Notifications.requestPermission();
         
-        // Return true if granted
         const hasPermission = window.OneSignal.Notifications.permission;
         if (hasPermission) {
           await window.OneSignal.User.pushSubscription.optIn();
