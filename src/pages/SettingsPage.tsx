@@ -466,7 +466,6 @@ export const SettingsPage: React.FC = () => {
                   if (granted) {
                     setPushRemindersEnabled(true);
                   } else {
-                    alert('Push notification permission was denied. Please enable notifications in your browser settings.');
                     setPushRemindersEnabled(false);
                   }
                 } else {
