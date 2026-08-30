@@ -95,33 +95,39 @@ export const SettingsPage: React.FC = () => {
             const { priorities, action_steps, meals, wind_down_items, medications, ...entryRow } = entry;
             entryRow.user_id = user.id;
 
-            await supabase.from('daily_entries').upsert(entryRow);
+            const { error: entryErr } = await supabase.from('daily_entries').upsert(entryRow);
+            if (entryErr) throw entryErr;
 
             // 2. Restore child relation rows
             if (Array.isArray(priorities) && priorities.length > 0) {
-              await supabase.from('priorities').upsert(
+              const { error: err } = await supabase.from('priorities').upsert(
                 priorities.map((p: any) => ({ ...p, daily_entry_id: entryId, user_id: user.id }))
               );
+              if (err) throw err;
             }
             if (Array.isArray(action_steps) && action_steps.length > 0) {
-              await supabase.from('action_steps').upsert(
+              const { error: err } = await supabase.from('action_steps').upsert(
                 action_steps.map((a: any) => ({ ...a, daily_entry_id: entryId, user_id: user.id }))
               );
+              if (err) throw err;
             }
             if (Array.isArray(meals) && meals.length > 0) {
-              await supabase.from('meals').upsert(
+              const { error: err } = await supabase.from('meals').upsert(
                 meals.map((m: any) => ({ ...m, daily_entry_id: entryId, user_id: user.id }))
               );
+              if (err) throw err;
             }
             if (Array.isArray(wind_down_items) && wind_down_items.length > 0) {
-              await supabase.from('wind_down_items').upsert(
+              const { error: err } = await supabase.from('wind_down_items').upsert(
                 wind_down_items.map((w: any) => ({ ...w, daily_entry_id: entryId, user_id: user.id }))
               );
+              if (err) throw err;
             }
             if (Array.isArray(medications) && medications.length > 0) {
-              await supabase.from('medications').upsert(
+              const { error: err } = await supabase.from('medications').upsert(
                 medications.map((med: any) => ({ ...med, daily_entry_id: entryId, user_id: user.id }))
               );
+              if (err) throw err;
             }
           }
 
@@ -133,12 +139,15 @@ export const SettingsPage: React.FC = () => {
           alert('Error parsing or saving backup data.');
         } finally {
           setRestoring(false);
+          // Clear file input value to allow selecting same file again if needed
+          if (e.target) e.target.value = '';
         }
       };
       reader.readAsText(file);
     } catch (err) {
       console.error(err);
       setRestoring(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -598,7 +607,7 @@ export const SettingsPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <input
               type="file"
-              accept=".json"
+              accept=".json,application/json,text/plain,application/octet-stream"
               className="text-xs text-text-muted cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-lavender-light file:text-lavender-dark hover:file:bg-lavender/30 dark:file:bg-dark-surface-raised dark:file:text-lavender"
               onChange={handleImportJSON}
               disabled={restoring}
