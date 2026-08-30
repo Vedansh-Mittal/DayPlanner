@@ -63,6 +63,20 @@ export async function subscribeToPush(userId: string): Promise<boolean> {
 
     console.log('Push subscription saved successfully');
 
+    // 6. NEW — flip on the flag the reminder cron job actually checks.
+    // Without this, subscriptions save fine but get_pending_reminders()
+    // never returns this user, so scheduled reminders silently never fire.
+    const { error: settingsError } = await supabase
+      .from('user_settings')
+      .update({ push_reminders_enabled: true })
+      .eq('user_id', userId);
+
+    if (settingsError) {
+      console.error('Failed to enable push reminders in settings:', settingsError);
+      // Don't return false here — the subscription itself still succeeded,
+      // and showing the welcome notification below is still accurate.
+    }
+
     // Show a local welcome notification to confirm subscription is working
     try {
       await registration.showNotification('Daylight Planner', {
@@ -97,6 +111,17 @@ export async function unsubscribeFromPush(userId: string): Promise<void> {
           .delete()
           .eq('user_id', userId)
           .eq('endpoint', subscription.endpoint);
+
+        // NEW — flip the flag back off so the cron job stops trying to
+        // send this user reminders after they've opted out.
+        const { error: settingsError } = await supabase
+          .from('user_settings')
+          .update({ push_reminders_enabled: false })
+          .eq('user_id', userId);
+
+        if (settingsError) {
+          console.error('Failed to disable push reminders in settings:', settingsError);
+        }
 
         // Then unsubscribe from browser
         await subscription.unsubscribe();
