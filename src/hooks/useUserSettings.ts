@@ -12,7 +12,9 @@ export function useUserSettings() {
 
   const load = useCallback(async () => {
     if (!user) { setLoading(false); return; }
-    setLoading(true);
+    if (!settings) {
+      setLoading(true);
+    }
     const { data, error } = await supabase
       .from('user_settings')
       .select('*')

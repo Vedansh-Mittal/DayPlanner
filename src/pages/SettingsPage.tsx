@@ -443,31 +443,7 @@ export const SettingsPage: React.FC = () => {
             />
           </div>
         </div>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            className="checkbox-custom"
-            checked={emailReminders}
-            onChange={async (e) => {
-              const checked = e.target.checked;
-              setEmailReminders(checked);
-              if (checked) {
-                const { requestNotificationPermission } = await import('../hooks/useNotificationReminders');
-                const permission = await requestNotificationPermission();
-                if (permission === 'denied') {
-                  alert('Notification permission is blocked. Please enable notifications in your browser settings to receive reminders.');
-                } else if (permission === 'unsupported') {
-                  alert('Notifications are not supported in this browser.');
-                }
-              }
-            }}
-          />
-          <span className="text-sm font-semibold flex items-center gap-1.5">
-            <Bell size={14} /> Enable browser reminders
-          </span>
-        </label>
-
-        <div className="pt-2 border-t border-border/40 dark:border-dark-border/40 space-y-3">
+        <div className="space-y-3">
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"

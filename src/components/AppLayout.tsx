@@ -61,8 +61,7 @@ export const AppLayout: React.FC = () => {
     }
   }, [showWelcome]);
 
-  // Initialize browser notification reminders
-  useNotificationReminders();
+
 
   // If loaded and not onboarded, redirect to onboarding
   if (!loading && settings && !settings.onboarding_complete) {
