@@ -8,6 +8,7 @@ import { getAllTimezones } from '../lib/utils';
 import {
   Settings as SettingsIcon, User, Globe, Clock, Droplets, Bell,
   Palette, LogOut, Trash2, Loader2, Check, Sun, Moon, Monitor,
+  Download, Upload, FileText
 } from 'lucide-react';
 
 const timezones = getAllTimezones();
@@ -31,6 +32,223 @@ export const SettingsPage: React.FC = () => {
   const [emailReminders, setEmailReminders] = useState(settings?.email_reminders || false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreSuccess, setRestoreSuccess] = useState(false);
+
+  const handleExportJSON = async () => {
+    if (!user) return;
+    setBackingUp(true);
+    try {
+      const { data: entries } = await supabase
+        .from('daily_entries')
+        .select('*, priorities(*), action_steps(*), meals(*), wind_down_items(*), medications(*)')
+        .eq('user_id', user.id);
+
+      const backupData = {
+        exported_at: new Date().toISOString(),
+        user_id: user.id,
+        entries: entries || []
+      };
+
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+        JSON.stringify(backupData, null, 2)
+      )}`;
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', jsonString);
+      downloadAnchor.setAttribute('download', `daylight_planner_backup_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } catch (err) {
+      console.error('Export error:', err);
+    }
+    setBackingUp(false);
+  };
+
+  const handleImportJSON = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setRestoring(true);
+    setRestoreSuccess(false);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const backup = JSON.parse(event.target?.result as string);
+          if (!backup || !Array.isArray(backup.entries)) {
+            alert('Invalid backup file structure.');
+            setRestoring(false);
+            return;
+          }
+
+          // Restore each entry and child rows
+          for (const entry of backup.entries) {
+            const entryId = entry.id;
+
+            // 1. Upsert daily entry row (remove nested arrays first)
+            const { priorities, action_steps, meals, wind_down_items, medications, ...entryRow } = entry;
+            entryRow.user_id = user.id;
+
+            await supabase.from('daily_entries').upsert(entryRow);
+
+            // 2. Restore child relation rows
+            if (Array.isArray(priorities) && priorities.length > 0) {
+              await supabase.from('priorities').upsert(
+                priorities.map((p: any) => ({ ...p, daily_entry_id: entryId, user_id: user.id }))
+              );
+            }
+            if (Array.isArray(action_steps) && action_steps.length > 0) {
+              await supabase.from('action_steps').upsert(
+                action_steps.map((a: any) => ({ ...a, daily_entry_id: entryId, user_id: user.id }))
+              );
+            }
+            if (Array.isArray(meals) && meals.length > 0) {
+              await supabase.from('meals').upsert(
+                meals.map((m: any) => ({ ...m, daily_entry_id: entryId, user_id: user.id }))
+              );
+            }
+            if (Array.isArray(wind_down_items) && wind_down_items.length > 0) {
+              await supabase.from('wind_down_items').upsert(
+                wind_down_items.map((w: any) => ({ ...w, daily_entry_id: entryId, user_id: user.id }))
+              );
+            }
+            if (Array.isArray(medications) && medications.length > 0) {
+              await supabase.from('medications').upsert(
+                medications.map((med: any) => ({ ...med, daily_entry_id: entryId, user_id: user.id }))
+              );
+            }
+          }
+
+          setRestoreSuccess(true);
+          setTimeout(() => setRestoreSuccess(false), 3000);
+          alert('Backup restored successfully!');
+        } catch (err) {
+          console.error(err);
+          alert('Error parsing or saving backup data.');
+        } finally {
+          setRestoring(false);
+        }
+      };
+      reader.readAsText(file);
+    } catch (err) {
+      console.error(err);
+      setRestoring(false);
+    }
+  };
+
+  const handlePrintDigest = async () => {
+    if (!user) return;
+    try {
+      const { data: entries } = await supabase
+        .from('daily_entries')
+        .select('*, priorities(*), action_steps(*), meals(*), wind_down_items(*), medications(*)')
+        .eq('user_id', user.id)
+        .order('entry_date', { ascending: false });
+
+      if (!entries || entries.length === 0) {
+        alert('No entries found to generate a print digest.');
+        return;
+      }
+
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Daylight Planner Journal Digest</title>
+              <style>
+                @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap');
+                body { font-family: 'Nunito', sans-serif; padding: 2.5rem; color: #2d3748; background-color: #ffffff; }
+                h1 { text-align: center; color: #4f46e5; margin-bottom: 0.5rem; font-size: 2.25rem; font-weight: 800; }
+                .subtitle { text-align: center; color: #718096; margin-bottom: 3rem; font-size: 0.95rem; }
+                .entry { border-bottom: 2px dashed #e2e8f0; padding: 2rem 0; page-break-inside: avoid; }
+                .entry:last-child { border-bottom: none; }
+                .date { font-size: 1.5rem; font-weight: 800; color: #1a202c; margin-bottom: 1.25rem; border-left: 4px solid #818cf8; padding-left: 0.75rem; }
+                .grid { display: grid; grid-template-cols: 1fr 1fr; gap: 2rem; }
+                @media (max-width: 600px) { .grid { grid-template-cols: 1fr; } }
+                .section { margin-bottom: 1.5rem; }
+                .section-title { font-weight: 700; color: #4f46e5; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.25rem; }
+                .text { font-size: 0.95rem; line-height: 1.6; color: #4a5568; margin-bottom: 0.5rem; }
+                .item-list { margin: 0; padding-left: 1.25rem; font-size: 0.95rem; line-height: 1.6; color: #4a5568; }
+                .badge { inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-left: 0.5rem; }
+                .badge-completed { background-color: #def7ec; color: #03543f; }
+                .badge-pending { background-color: #fef3c7; color: #92400e; }
+              </style>
+            </head>
+            <body>
+              <h1>Daylight Planner</h1>
+              <div class="subtitle">Personal Journal Digest • Generated on ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+              ${entries.map(e => {
+                const datePretty = new Date(e.entry_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                const morningStatusBadge = e.morning_completed ? '<span class="badge badge-completed">Complete</span>' : '<span class="badge badge-pending">In Progress</span>';
+                const nightStatusBadge = e.night_completed ? '<span class="badge badge-completed">Complete</span>' : '<span class="badge badge-pending">In Progress</span>';
+
+                return `
+                  <div class="entry">
+                    <div class="date">${datePretty}</div>
+                    <div class="grid">
+                      <div>
+                        <div class="section">
+                          <div class="section-title">☀️ Morning Planner ${morningStatusBadge}</div>
+                          <div class="text"><strong>Mood:</strong> ${e.morning_mood || 'Unrecorded'} (Intensity: ${e.morning_mood_intensity || 'N/A'}/10)</div>
+                          <div class="text"><strong>Why:</strong> ${e.morning_why || 'Unrecorded'}</div>
+                          <div class="text"><strong>Inspire me:</strong> ${e.morning_inspire || 'Unrecorded'}</div>
+                          <div class="text"><strong>Brain Dump:</strong> ${e.morning_brain_dump || 'None'}</div>
+                        </div>
+                        <div class="section">
+                          <div class="section-title">🎯 Focus Priorities</div>
+                          <ol class="item-list">
+                            ${(e.priorities || []).map((p: any) => `<li>${p.text || ''}</li>`).join('') || '<li>None</li>'}
+                          </ol>
+                        </div>
+                        <div class="section">
+                          <div class="section-title">👟 Plan of Action</div>
+                          <ol class="item-list">
+                            ${(e.action_steps || []).map((a: any) => `<li>${a.text || ''}</li>`).join('') || '<li>None</li>'}
+                          </ol>
+                        </div>
+                      </div>
+                      <div>
+                        <div class="section">
+                          <div class="section-title">🌙 Night Reflection ${nightStatusBadge}</div>
+                          <div class="text"><strong>Mood:</strong> ${e.night_mood || 'Unrecorded'} (Intensity: ${e.night_mood_intensity || 'N/A'}/10)</div>
+                          <div class="text"><strong>Win of the Day:</strong> ${e.night_win || 'Unrecorded'}</div>
+                          <div class="text"><strong>What Went Well:</strong> ${e.night_went_well || 'Unrecorded'}</div>
+                          <div class="text"><strong>Improvement:</strong> ${e.night_improve || 'Unrecorded'}</div>
+                          <div class="text"><strong>Intention:</strong> ${e.night_intention || 'Unrecorded'}</div>
+                          <div class="text"><strong>Hydration:</strong> ${e.water_count || 0} glasses</div>
+                        </div>
+                        <div class="section">
+                          <div class="section-title">🙏 Gratitudes</div>
+                          <ul class="item-list">
+                            ${e.night_gratitude_1 ? `<li>${e.night_gratitude_1}</li>` : ''}
+                            ${e.night_gratitude_2 ? `<li>${e.night_gratitude_2}</li>` : ''}
+                            ${e.night_gratitude_3 ? `<li>${e.night_gratitude_3}</li>` : ''}
+                            ${(!e.night_gratitude_1 && !e.night_gratitude_2 && !e.night_gratitude_3) ? '<li>None</li>' : ''}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+              <script>
+                window.onload = function() {
+                  window.print();
+                };
+              </script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // Sync local state when settings load
   React.useEffect(() => {
@@ -295,6 +513,60 @@ export const SettingsPage: React.FC = () => {
         <LogOut size={18} />
         Log Out
       </button>
+
+      {/* Backup and Export */}
+      <section className="card space-y-4">
+        <h2 className="section-title text-text-primary dark:text-dark-text">
+          <Download size={18} className="text-lavender" />
+          Backup & Export Data
+        </h2>
+        <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
+          Your Daylight Planner database is safe! Supabase operates on robust storage with automatic daily backups. 
+          Additionally, you can download copy backups of your data below to keep them locally, or restore a backup.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+          {/* JSON Export */}
+          <button
+            type="button"
+            className="btn-secondary py-3 flex items-center justify-center gap-2 font-semibold"
+            onClick={handleExportJSON}
+            disabled={backingUp}
+          >
+            <Download size={16} />
+            {backingUp ? 'Exporting...' : 'Download JSON Backup'}
+          </button>
+
+          {/* PDF Journal Digest */}
+          <button
+            type="button"
+            className="btn-secondary py-3 flex items-center justify-center gap-2 font-semibold"
+            onClick={handlePrintDigest}
+          >
+            <FileText size={16} />
+            Generate PDF/Print Journal
+          </button>
+        </div>
+
+        {/* JSON Import/Restore */}
+        <div className="pt-4 border-t border-border dark:border-dark-border">
+          <label className="block text-sm font-semibold mb-2 flex items-center gap-2">
+            <Upload size={14} className="text-lavender" />
+            Restore data from JSON Backup
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              type="file"
+              accept=".json"
+              className="text-xs text-text-muted cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-lavender-light file:text-lavender-dark hover:file:bg-lavender/30 dark:file:bg-dark-surface-raised dark:file:text-lavender"
+              onChange={handleImportJSON}
+              disabled={restoring}
+            />
+            {restoring && <Loader2 size={16} className="animate-spin text-lavender" />}
+            {restoreSuccess && <span className="text-xs text-emerald-500 font-semibold">Done!</span>}
+          </div>
+        </div>
+      </section>
 
       {/* Delete data */}
       <div className="card border-red-200 dark:border-red-900/30">
