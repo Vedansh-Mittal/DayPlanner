@@ -8,6 +8,7 @@ export interface UserSettings {
   night_reminder: string | null;
   water_goal: number;
   email_reminders: boolean;
+  push_reminders_enabled: boolean;
   theme: 'light' | 'dark' | 'system';
   onboarding_complete: boolean;
   created_at: string;

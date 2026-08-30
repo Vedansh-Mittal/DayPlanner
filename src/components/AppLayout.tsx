@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth-store';
 import { useUserSettings } from '../hooks/useUserSettings';
 import { useNotificationReminders } from '../hooks/useNotificationReminders';
 import { Navigate } from 'react-router-dom';
+import { initOneSignalQuietly, logoutOneSignal } from '../lib/onesignal';
 
 const NAV_ITEMS = [
   { to: '/app', label: 'Today', icon: Sun, end: true },
@@ -27,8 +28,15 @@ const GENTLE_MESSAGES = [
 
 export const AppLayout: React.FC = () => {
   const signOut = useAuthStore((s) => s.signOut);
+  const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const { settings, loading } = useUserSettings();
+
+  React.useEffect(() => {
+    if (user && settings?.push_reminders_enabled) {
+      initOneSignalQuietly(user.id);
+    }
+  }, [user, settings?.push_reminders_enabled]);
 
   const [showWelcome, setShowWelcome] = React.useState(() => {
     return !sessionStorage.getItem('dayplanner_welcome_shown');
@@ -65,6 +73,7 @@ export const AppLayout: React.FC = () => {
   }
 
   const handleLogout = async () => {
+    logoutOneSignal();
     await signOut();
     navigate('/login');
   };

@@ -332,3 +332,94 @@ BEGIN
   LIMIT 50;
 END;
 $$;
+
+
+-- ============================================================
+-- 5. PUSH NOTIFICATION REMINDERS & SCHEDULING
+-- ============================================================
+
+-- Add push_reminders_enabled to user_settings
+ALTER TABLE public.user_settings 
+ADD COLUMN IF NOT EXISTS push_reminders_enabled boolean NOT NULL DEFAULT false;
+
+-- Create reminder_log table
+CREATE TABLE IF NOT EXISTS public.reminder_log (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  entry_date     date NOT NULL,
+  reminder_type  text NOT NULL CHECK (reminder_type IN ('morning_checkin', 'lunch_nudge', 'night_reflection')),
+  sent_at        timestamptz NOT NULL DEFAULT now(),
+  status         text NOT NULL CHECK (status IN ('pending', 'sent', 'failed')),
+  error_message  text,
+
+  CONSTRAINT reminder_log_user_date_type_unique UNIQUE (user_id, entry_date, reminder_type)
+);
+
+-- Enable RLS on reminder_log
+ALTER TABLE public.reminder_log ENABLE ROW LEVEL SECURITY;
+
+-- Policies for reminder_log
+DROP POLICY IF EXISTS "Users can view own reminder logs" ON public.reminder_log;
+CREATE POLICY "Users can view own reminder logs" ON public.reminder_log FOR SELECT USING (auth.uid() = user_id);
+
+-- Fetch users eligible for reminders based on local timezone and time
+CREATE OR REPLACE FUNCTION public.get_pending_reminders()
+RETURNS TABLE (
+  user_id uuid,
+  display_name text,
+  timezone text,
+  morning_reminder text,
+  night_reminder text,
+  local_date date,
+  local_time text,
+  morning_completed boolean,
+  night_completed boolean
+) LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    us.user_id,
+    us.display_name,
+    us.timezone,
+    COALESCE(us.morning_reminder, '10:00') as morning_reminder,
+    COALESCE(us.night_reminder, '20:00') as night_reminder,
+    ((now() AT TIME ZONE us.timezone)::date) as local_date,
+    to_char((now() AT TIME ZONE us.timezone)::time, 'HH24:MI') as local_time,
+    COALESCE(de.morning_completed, false) as morning_completed,
+    COALESCE(de.night_completed, false) as night_completed
+  FROM public.user_settings us
+  LEFT JOIN public.daily_entries de 
+    ON de.user_id = us.user_id 
+    AND de.entry_date = ((now() AT TIME ZONE us.timezone)::date)
+  WHERE us.push_reminders_enabled = true;
+END;
+$$;
+
+-- Atomic claiming of reminder_log to prevent double sends
+CREATE OR REPLACE FUNCTION public.claim_reminder_log(
+  p_user_id uuid,
+  p_entry_date date,
+  p_reminder_type text
+)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_log_id uuid;
+BEGIN
+  INSERT INTO public.reminder_log (user_id, entry_date, reminder_type, status)
+  VALUES (p_user_id, p_entry_date, p_reminder_type, 'pending')
+  ON CONFLICT (user_id, entry_date, reminder_type)
+  DO UPDATE SET 
+    status = 'pending',
+    error_message = NULL,
+    sent_at = now()
+  WHERE reminder_log.status = 'failed'
+  RETURNING id INTO v_log_id;
+
+  RETURN v_log_id;
+END;
+$$;
+
+-- Revoke public permissions for security
+REVOKE EXECUTE ON FUNCTION public.get_pending_reminders() FROM public, authenticated, anon;
+REVOKE EXECUTE ON FUNCTION public.claim_reminder_log(uuid, date, text) FROM public, authenticated, anon;
+

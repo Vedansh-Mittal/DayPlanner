@@ -10,6 +10,7 @@ import {
   Palette, LogOut, Trash2, Loader2, Check, Sun, Moon, Monitor,
   Download, Upload, FileText
 } from 'lucide-react';
+import { requestOneSignalPushPermission, disableOneSignalPush } from '../lib/onesignal';
 
 const timezones = getAllTimezones();
 
@@ -30,6 +31,7 @@ export const SettingsPage: React.FC = () => {
   const [nightReminder, setNightReminder] = useState(settings?.night_reminder || '21:00');
   const [waterGoal, setWaterGoal] = useState(settings?.water_goal || 8);
   const [emailReminders, setEmailReminders] = useState(settings?.email_reminders || false);
+  const [pushRemindersEnabled, setPushRemindersEnabled] = useState(settings?.push_reminders_enabled || false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
@@ -259,6 +261,7 @@ export const SettingsPage: React.FC = () => {
       setNightReminder(settings.night_reminder || '21:00');
       setWaterGoal(settings.water_goal);
       setEmailReminders(settings.email_reminders);
+      setPushRemindersEnabled(settings.push_reminders_enabled);
     }
   }, [settings]);
 
@@ -277,6 +280,7 @@ export const SettingsPage: React.FC = () => {
         night_reminder: nightReminder,
         water_goal: waterGoal,
         email_reminders: emailReminders,
+        push_reminders_enabled: pushRemindersEnabled,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -456,10 +460,39 @@ export const SettingsPage: React.FC = () => {
               }
             }}
           />
-          <span className="text-sm font-semibold flex items-center gap-1.5">
-            <Bell size={14} /> Enable browser reminders
-          </span>
         </label>
+
+        <div className="pt-2 border-t border-border/40 dark:border-dark-border/40 space-y-3">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="checkbox-custom"
+              checked={pushRemindersEnabled}
+              onChange={async (e) => {
+                const checked = e.target.checked;
+                if (checked) {
+                  if (!user) return;
+                  const granted = await requestOneSignalPushPermission(user.id);
+                  if (granted) {
+                    setPushRemindersEnabled(true);
+                  } else {
+                    alert('Push notification permission was denied. Please enable notifications in your browser settings.');
+                    setPushRemindersEnabled(false);
+                  }
+                } else {
+                  setPushRemindersEnabled(false);
+                  disableOneSignalPush();
+                }
+              }}
+            />
+            <span className="text-sm font-semibold flex items-center gap-1.5">
+              <Bell size={14} /> Enable push notifications
+            </span>
+          </label>
+          <p className="text-xs text-text-muted dark:text-dark-text-muted pl-7">
+            Push reminders are delivered directly to your device (desktop or mobile) and require browser notification permission. Ensure you are using a supported browser.
+          </p>
+        </div>
       </section>
 
       {/* Water goal */}
