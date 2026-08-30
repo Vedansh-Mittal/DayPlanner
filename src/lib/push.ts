@@ -76,7 +76,7 @@ export async function subscribeToPush(userId: string): Promise<boolean> {
     }
 
     // 6. Save subscription to Supabase
-    const { error } = await supabase
+    let { error } = await supabase
       .from('push_subscriptions')
       .upsert(
         {
@@ -87,6 +87,21 @@ export async function subscribeToPush(userId: string): Promise<boolean> {
         },
         { onConflict: 'user_id,endpoint' }
       );
+
+    if (error && error.message?.includes('row-level security policy')) {
+      // Fallback: try inserting or ignore if already present
+      const { error: insertErr } = await supabase
+        .from('push_subscriptions')
+        .insert({
+          user_id: userId,
+          endpoint: subJSON.endpoint,
+          p256dh: subJSON.keys.p256dh,
+          auth: subJSON.keys.auth,
+        });
+      if (!insertErr || insertErr.code === '23505') {
+        error = null;
+      }
+    }
 
     if (error) {
       console.error('Failed to save push subscription:', error);
