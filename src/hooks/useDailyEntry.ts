@@ -123,6 +123,28 @@ export function useDailyEntry(dateStr: string) {
 
     if (fetchErr) {
       console.error('Load entry error:', fetchErr);
+      try {
+        const cacheStr = localStorage.getItem('daylight_offline_cache');
+        if (cacheStr) {
+          const cache = JSON.parse(cacheStr);
+          const cachedData = cache[dateStr];
+          if (cachedData) {
+            console.log('Successfully loaded date from offline cache:', dateStr);
+            setEntryId(cachedData.id || null);
+            setEntryFields(extractFields(cachedData));
+            setPriorities(cachedData.priorities || defaultPriorities());
+            setActionSteps(cachedData.action_steps || defaultActions());
+            setMedications(cachedData.medications || []);
+            setMeals(cachedData.meals || defaultMeals());
+            setWindDownItems(cachedData.wind_down_items || defaultWindDown());
+            setLoading(false);
+            setSaveStatus('idle');
+            return;
+          }
+        }
+      } catch (cacheErr) {
+        console.error('Offline cache load error:', cacheErr);
+      }
       setError('Failed to load entry');
       setLoading(false);
       return;
@@ -153,6 +175,16 @@ export function useDailyEntry(dateStr: string) {
         (data.wind_down_items as WindDownItem[]).length > 0
           ? (data.wind_down_items as WindDownItem[])
           : defaultWindDown(),
+      );
+
+      saveToLocalCache(
+        dateStr,
+        extractFields(data),
+        data.priorities || [],
+        data.action_steps || [],
+        data.meals || [],
+        data.wind_down_items || [],
+        data.medications || []
       );
     } else {
       // No entry for this date → local defaults, not persisted yet
@@ -333,6 +365,21 @@ export function useDailyEntry(dateStr: string) {
       dirtyRef.current = false;
       setSaveStatus('saved');
       setError(null);
+
+      saveToLocalCache(
+        dateStrRef.current,
+        {
+          ...fields,
+          id: savedId,
+          morning_completed: morningCompleted,
+          night_completed: nightCompleted,
+        },
+        prioritiesRef.current,
+        actionStepsRef.current,
+        mealsRef.current,
+        windDownRef.current,
+        medicationsRef.current
+      );
     } catch (err: any) {
       console.error('Save error:', err);
       setSaveStatus('error');
@@ -511,4 +558,32 @@ function extractFields(e: any): typeof DEFAULT_ENTRY_FIELDS {
     water_count: e.water_count,
     night_completed: e.night_completed,
   };
+}
+
+export function saveToLocalCache(
+  date: string,
+  entry: any,
+  priorities: any[],
+  actionSteps: any[],
+  meals: any[],
+  windDown: any[],
+  meds: any[]
+) {
+  try {
+    const cacheStr = localStorage.getItem('daylight_offline_cache') || '{}';
+    const cache = JSON.parse(cacheStr);
+    cache[date] = {
+      ...entry,
+      priorities,
+      action_steps: actionSteps,
+      meals,
+      wind_down_items: windDown,
+      medications: meds,
+      entry_date: date,
+      updated_at: new Date().toISOString()
+    };
+    localStorage.setItem('daylight_offline_cache', JSON.stringify(cache));
+  } catch (err) {
+    console.error('Error writing to offline cache:', err);
+  }
 }

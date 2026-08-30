@@ -304,7 +304,32 @@ export const SettingsPage: React.FC = () => {
     if (!user) return;
     setDeleting(true);
     try {
-      // Delete all user data in order (child tables first due to FK)
+      // 1. Automatically trigger a pre-delete backup download so they don't accidentally lose anything
+      const { data: entries } = await supabase
+        .from('daily_entries')
+        .select('*, priorities(*), action_steps(*), meals(*), wind_down_items(*), medications(*)')
+        .eq('user_id', user.id);
+
+      const backupData = {
+        exported_at: new Date().toISOString(),
+        user_id: user.id,
+        entries: entries || []
+      };
+
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+        JSON.stringify(backupData, null, 2)
+      )}`;
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', jsonString);
+      downloadAnchor.setAttribute('download', `daylight_planner_pre_delete_backup_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+
+      // 2. Clear local browser offline cache
+      localStorage.removeItem('daylight_offline_cache');
+
+      // 3. Delete all database data
       await supabase.from('wind_down_items').delete().eq('user_id', user.id);
       await supabase.from('meals').delete().eq('user_id', user.id);
       await supabase.from('medications').delete().eq('user_id', user.id);
