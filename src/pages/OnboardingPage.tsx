@@ -26,7 +26,7 @@ export const OnboardingPage: React.FC = () => {
   const [pushRemindersEnabled, setPushRemindersEnabled] = useState(false);
 
   const filteredTz = tzSearch
-    ? timezones.filter((tz) => tz.toLowerCase().includes(tzSearch.toLowerCase()))
+    ? timezones.filter((tz) => tz.label.toLowerCase().includes(tzSearch.toLowerCase()))
     : timezones;
 
   const handleFinish = async () => {
@@ -87,7 +87,7 @@ export const OnboardingPage: React.FC = () => {
           type="text"
           className="input-field"
           placeholder="Search timezone…"
-          value={tzOpen ? tzSearch : timezone}
+          value={tzOpen ? tzSearch : (timezones.find((t) => t.value === timezone)?.label || timezone)}
           onFocus={() => { setTzOpen(true); setTzSearch(''); }}
           onChange={(e) => setTzSearch(e.target.value)}
           onBlur={() => setTimeout(() => setTzOpen(false), 200)}
@@ -96,15 +96,15 @@ export const OnboardingPage: React.FC = () => {
           <div className="tz-dropdown">
             {filteredTz.slice(0, 50).map((tz) => (
               <div
-                key={tz}
-                className={`tz-dropdown-item ${tz === timezone ? 'highlighted' : ''}`}
+                key={tz.value}
+                className={`tz-dropdown-item ${tz.value === timezone ? 'highlighted' : ''}`}
                 onMouseDown={() => {
-                  setTimezone(tz);
+                  setTimezone(tz.value);
                   setTzOpen(false);
                   setTzSearch('');
                 }}
               >
-                {tz}
+                {tz.label}
               </div>
             ))}
             {filteredTz.length === 0 && (
@@ -113,7 +113,9 @@ export const OnboardingPage: React.FC = () => {
           </div>
         )}
       </div>
-      <p className="text-xs text-text-muted">Currently selected: <strong>{timezone}</strong></p>
+      <p className="text-xs text-text-muted">
+        Currently selected: <strong>{timezones.find((t) => t.value === timezone)?.label || timezone}</strong>
+      </p>
     </div>,
 
     // Step 2: Reminders + water
