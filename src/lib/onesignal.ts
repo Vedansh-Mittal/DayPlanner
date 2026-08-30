@@ -30,26 +30,32 @@ export function initOneSignalQuietly(userId: string) {
 export async function requestOneSignalPushPermission(userId: string): Promise<boolean> {
   if (typeof window === 'undefined') return false;
 
-  const OneSignal = window.OneSignal;
-  // If OneSignal is already initialized and loaded, invoke requestPermission synchronously to preserve user-gesture
-  if (OneSignal && typeof OneSignal.Notifications?.requestPermission === 'function') {
+  if (typeof Notification === 'undefined') {
+    console.error('Notifications not supported by browser.');
+    return false;
+  }
+
+  // If already denied, return false so settings can show the block alert
+  if (Notification.permission === 'denied') {
+    return false;
+  }
+
+  let permissionStatus: any = Notification.permission;
+
+  if (permissionStatus === 'default') {
     try {
-      if (userId) {
-        await OneSignal.login(userId);
-      }
-      await OneSignal.Notifications.requestPermission();
-      const hasPermission = OneSignal.Notifications.permission;
-      if (hasPermission) {
-        await OneSignal.User.pushSubscription.optIn();
-      }
-      return hasPermission;
+      // Call native browser prompt directly inside user-gesture stack (100% reliable prompt trigger)
+      permissionStatus = (await Notification.requestPermission()) as NotificationPermission;
     } catch (err) {
-      console.error('Direct OneSignal permission request failed:', err);
+      console.error('Native permission request failed:', err);
+      return false;
     }
   }
 
-  // Fallback to queue if not fully loaded/initialized yet
-  return new Promise((resolve) => {
+  const isGranted = permissionStatus === 'granted';
+
+  if (isGranted) {
+    // Quietly sync with OneSignal in the background once permission is secured
     window.OneSignal = window.OneSignal || [];
     window.OneSignal.push(async function() {
       try {
@@ -63,19 +69,14 @@ export async function requestOneSignalPushPermission(userId: string): Promise<bo
           await window.OneSignal.login(userId);
         }
 
-        await window.OneSignal.Notifications.requestPermission();
-        
-        const hasPermission = window.OneSignal.Notifications.permission;
-        if (hasPermission) {
-          await window.OneSignal.User.pushSubscription.optIn();
-        }
-        resolve(hasPermission);
+        await window.OneSignal.User.pushSubscription.optIn();
       } catch (err) {
-        console.error('OneSignal permission request failed:', err);
-        resolve(false);
+        console.error('OneSignal background registration failed:', err);
       }
     });
-  });
+  }
+
+  return isGranted;
 }
 
 /** Turn off push notifications for this browser session */
