@@ -62,6 +62,19 @@ export async function subscribeToPush(userId: string): Promise<boolean> {
     }
 
     console.log('Push subscription saved successfully');
+
+    // Show a local welcome notification to confirm subscription is working
+    try {
+      await registration.showNotification('Daylight Planner', {
+        body: 'Thanks for subscribing to push notifications! 🔔',
+        icon: '/icon.svg',
+        badge: '/icon.svg',
+        vibrate: [100, 50, 100],
+      } as any);
+    } catch (e) {
+      console.warn('Failed to show local welcome notification:', e);
+    }
+
     return true;
   } catch (err) {
     console.error('Push subscription failed:', err);
