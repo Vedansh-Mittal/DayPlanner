@@ -77,22 +77,32 @@ Deno.serve(async (req) => {
       let messageTemplate = "";
 
       // Evaluate match conditions
-      if (localTime === morningTime) {
-        // Morning: sent regardless of completion
-        reminderType = "morning_checkin";
+      if (localTime === "10:00") {
+        // Good Morning (fixed at 10 AM, always sent)
+        reminderType = "good_morning";
         const idx = Math.floor(Math.random() * MORNING_MESSAGES.length);
         messageTemplate = MORNING_MESSAGES[idx];
-      } else if (localTime === "14:00") {
-        // Lunch: only sent if Morning Planner is incomplete
+      } else if (localTime === morningTime) {
+        // Morning Planner Reminder (configurable time, only if morning is incomplete)
+        if (!morningDone) {
+          reminderType = "morning_reminder";
+          messageTemplate = "Time to fill in your morning planner. Start your day with intention, {name}! ☀️";
+        }
+      }
+
+      if (localTime === "14:00") {
+        // Lunch Nudge (fixed at 2 PM, only if morning is incomplete)
         if (!morningDone) {
           reminderType = "lunch_nudge";
           const idx = Math.floor(Math.random() * LUNCH_MESSAGES.length);
           messageTemplate = LUNCH_MESSAGES[idx];
         }
-      } else if (localTime === nightTime) {
-        // Night: only sent if Night Planner is incomplete
+      }
+
+      if (localTime === nightTime) {
+        // Night Planner Reminder (configurable time, only if night is incomplete)
         if (!nightDone) {
-          reminderType = "night_reflection";
+          reminderType = "night_reminder";
           const idx = Math.floor(Math.random() * NIGHT_MESSAGES.length);
           messageTemplate = NIGHT_MESSAGES[idx];
         }

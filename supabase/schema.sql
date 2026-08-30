@@ -347,7 +347,7 @@ CREATE TABLE IF NOT EXISTS public.reminder_log (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id        uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   entry_date     date NOT NULL,
-  reminder_type  text NOT NULL CHECK (reminder_type IN ('morning_checkin', 'lunch_nudge', 'night_reflection')),
+  reminder_type  text NOT NULL CHECK (reminder_type IN ('good_morning', 'morning_reminder', 'lunch_nudge', 'night_reminder')),
   sent_at        timestamptz NOT NULL DEFAULT now(),
   status         text NOT NULL CHECK (status IN ('pending', 'sent', 'failed')),
   error_message  text,
