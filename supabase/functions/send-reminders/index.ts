@@ -46,7 +46,7 @@ function base64UrlDecode(str: string): Uint8Array {
 async function importVapidKeys(publicKeyB64: string, privateKeyB64: string) {
   const publicKeyBytes = base64UrlDecode(publicKeyB64);
   const privateKeyBytes = base64UrlDecode(privateKeyB64);
-  
+
   const publicKey = await crypto.subtle.importKey(
     'raw',
     publicKeyBytes,
@@ -54,7 +54,7 @@ async function importVapidKeys(publicKeyB64: string, privateKeyB64: string) {
     true,
     []
   );
-  
+
   const privateKey = await crypto.subtle.importKey(
     'jwk',
     {
@@ -68,7 +68,7 @@ async function importVapidKeys(publicKeyB64: string, privateKeyB64: string) {
     true,
     ['sign']
   );
-  
+
   return { publicKey, privateKey, publicKeyBytes };
 }
 
@@ -79,21 +79,21 @@ async function createVapidAuthHeader(
   subject: string,
 ) {
   const { privateKey, publicKeyBytes } = await importVapidKeys(vapidPublicKeyB64, vapidPrivateKeyB64);
-  
+
   const audience = new URL(endpoint).origin;
   const now = Math.floor(Date.now() / 1000);
-  
+
   const header = { typ: 'JWT', alg: 'ES256' };
   const payload = {
     aud: audience,
     exp: now + 12 * 3600, // 12h
     sub: subject,
   };
-  
+
   const headerB64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
   const payloadB64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
   const unsigned = `${headerB64}.${payloadB64}`;
-  
+
   const signature = await crypto.subtle.sign(
     { name: 'ECDSA', hash: 'SHA-256' },
     privateKey,
@@ -103,7 +103,7 @@ async function createVapidAuthHeader(
   // Convert DER signature to raw r||s (64 bytes)
   const sigBytes = new Uint8Array(signature);
   let rawSig: Uint8Array;
-  
+
   if (sigBytes.length === 64) {
     rawSig = sigBytes;
   } else {
@@ -124,16 +124,25 @@ async function createVapidAuthHeader(
     rawSig.set(r.length > 32 ? r.slice(r.length - 32) : r, 32 - Math.min(r.length, 32));
     rawSig.set(s.length > 32 ? s.slice(s.length - 32) : s, 64 - Math.min(s.length, 32));
   }
-  
+
   const jwt = `${unsigned}.${base64UrlEncode(rawSig)}`;
   const p256ecdsa = base64UrlEncode(publicKeyBytes);
-  
+
   return {
     authorization: `vapid t=${jwt}, k=${p256ecdsa}`,
   };
 }
 
 // ── Encryption (aes128gcm, RFC 8291) ────────────────────────
+//
+// FIXED: the random `salt` must be generated BEFORE deriving the content
+// encryption key (CEK) and nonce, and that same salt must be used for both
+// the derivation AND the message header. The previous version derived CEK/
+// nonce with an empty salt, then generated the real salt only afterward for
+// the header — so the key used to encrypt never matched the salt the
+// receiving browser would use to decrypt. Every push was accepted by the
+// push service (200/201, logged as "sent") but silently failed to decrypt
+// on-device, so no notification ever displayed.
 
 async function encryptPayload(
   payload: string,
@@ -144,18 +153,18 @@ async function encryptPayload(
 ): Promise<{ body: Uint8Array; contentEncoding: string }> {
   const userPublicKeyBytes = base64UrlDecode(p256dhB64);
   const authSecret = base64UrlDecode(authB64);
-  
+
   // Generate ephemeral ECDH key pair
   const localKeyPair = await crypto.subtle.generateKey(
     { name: 'ECDH', namedCurve: 'P-256' },
     true,
     ['deriveBits']
   );
-  
+
   const localPublicKeyRaw = new Uint8Array(
     await crypto.subtle.exportKey('raw', localKeyPair.publicKey)
   );
-  
+
   // Import subscriber's public key
   const subscriberKey = await crypto.subtle.importKey(
     'raw',
@@ -164,7 +173,7 @@ async function encryptPayload(
     true,
     []
   );
-  
+
   // ECDH shared secret
   const sharedSecretBits = new Uint8Array(
     await crypto.subtle.deriveBits(
@@ -173,67 +182,76 @@ async function encryptPayload(
       256
     )
   );
-  
-  // PRK (auth secret info)
+
+  // Step 1: IKM = HKDF-Extract(salt=auth_secret, ikm=ecdh_secret) then
+  // HKDF-Expand(..., info="WebPush: info\0" || ua_public || as_public, 32)
   const authInfo = new Uint8Array([
     ...new TextEncoder().encode('WebPush: info\0'),
     ...userPublicKeyBytes,
     ...localPublicKeyRaw,
   ]);
-  
+
   const ikmKey = await crypto.subtle.importKey('raw', sharedSecretBits, { name: 'HKDF' }, false, ['deriveBits']);
-  const prkBits = await crypto.subtle.deriveBits(
+  const ikmBits = await crypto.subtle.deriveBits(
     { name: 'HKDF', hash: 'SHA-256', salt: authSecret, info: authInfo },
     ikmKey,
     256
   );
-  const prkKey = await crypto.subtle.importKey('raw', new Uint8Array(prkBits), { name: 'HKDF' }, false, ['deriveBits']);
-  
+
+  // Generate the random salt NOW — before deriving CEK/nonce — since both
+  // the derivation and the outgoing message header must use this same value.
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+
+  const prkKey = await crypto.subtle.importKey('raw', new Uint8Array(ikmBits), { name: 'HKDF' }, false, ['deriveBits']);
+
+  // Step 2: PRK = HKDF-Extract(salt=random_salt, ikm=IKM) — performed
+  // implicitly by WebCrypto when we pass `salt` + `info` to deriveBits below.
+
   // Content encryption key
   const cekInfo = new TextEncoder().encode('Content-Encoding: aes128gcm\0');
   const cekBits = await crypto.subtle.deriveBits(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: cekInfo },
+    { name: 'HKDF', hash: 'SHA-256', salt, info: cekInfo },
     prkKey,
     128
   );
   const cek = await crypto.subtle.importKey('raw', new Uint8Array(cekBits), { name: 'AES-GCM' }, false, ['encrypt']);
-  
+
   // Nonce
   const nonceInfo = new TextEncoder().encode('Content-Encoding: nonce\0');
   const nonceBits = await crypto.subtle.deriveBits(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: nonceInfo },
+    { name: 'HKDF', hash: 'SHA-256', salt, info: nonceInfo },
     prkKey,
     96
   );
   const nonce = new Uint8Array(nonceBits);
-  
+
   // Pad and encrypt payload
   const payloadBytes = new TextEncoder().encode(payload);
   const paddedPayload = new Uint8Array(payloadBytes.length + 2);
   paddedPayload.set(payloadBytes);
   paddedPayload[payloadBytes.length] = 2; // delimiter
   paddedPayload[payloadBytes.length + 1] = 0; // padding
-  
+
   const encrypted = new Uint8Array(
     await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, cek, paddedPayload)
   );
-  
+
   // Build aes128gcm header: salt (16) + rs (4) + idlen (1) + keyid (65) + ciphertext
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  // Recalculate with actual salt
-  const prkKey2 = await crypto.subtle.importKey('raw', new Uint8Array(prkBits), { name: 'HKDF' }, false, ['deriveBits']);
-  
+  // rs is the per-record size (ciphertext + tag) — it does NOT include the
+  // header bytes, so the previous "+86" was non-standard (harmless in
+  // practice since it only ever needs to be >= the real record size, but
+  // removed here to match RFC 8188 precisely).
   const recordSize = paddedPayload.length + 16; // payload + tag
   const rs = new DataView(new ArrayBuffer(4));
-  rs.setUint32(0, recordSize + 86); // header + record
-  
+  rs.setUint32(0, recordSize);
+
   const body = new Uint8Array(16 + 4 + 1 + localPublicKeyRaw.length + encrypted.length);
   body.set(salt, 0);
   body.set(new Uint8Array(rs.buffer), 16);
   body[20] = localPublicKeyRaw.length;
   body.set(localPublicKeyRaw, 21);
   body.set(encrypted, 21 + localPublicKeyRaw.length);
-  
+
   return { body, contentEncoding: 'aes128gcm' };
 }
 
@@ -390,7 +408,7 @@ Deno.serve(async (req) => {
           } else {
             const errText = await pushRes.text();
             console.error(`[Failed] Push ${pushRes.status}: ${errText}`);
-            
+
             // If endpoint is gone (410 Gone or 404), clean up
             if (pushRes.status === 410 || pushRes.status === 404) {
               await supabase
