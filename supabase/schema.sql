@@ -423,3 +423,26 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.get_pending_reminders() FROM public, authenticated, anon;
 REVOKE EXECUTE ON FUNCTION public.claim_reminder_log(uuid, date, text) FROM public, authenticated, anon;
 
+
+-- ============================================================
+-- PUSH SUBSCRIPTIONS (Native Web Push API)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.push_subscriptions (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  endpoint   text NOT NULL,
+  p256dh     text NOT NULL,
+  auth       text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(user_id, endpoint)
+);
+
+ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own subscriptions"   ON public.push_subscriptions;
+DROP POLICY IF EXISTS "Users can insert own subscriptions" ON public.push_subscriptions;
+DROP POLICY IF EXISTS "Users can delete own subscriptions" ON public.push_subscriptions;
+
+CREATE POLICY "Users can view own subscriptions"   ON public.push_subscriptions FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own subscriptions" ON public.push_subscriptions FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own subscriptions" ON public.push_subscriptions FOR DELETE USING (auth.uid() = user_id);

@@ -10,7 +10,7 @@ import {
   Palette, LogOut, Trash2, Loader2, Check, Sun, Moon, Monitor,
   Download, Upload, FileText
 } from 'lucide-react';
-import { requestOneSignalPushPermission, disableOneSignalPush } from '../lib/onesignal';
+import { subscribeToPush, unsubscribeFromPush } from '../lib/push';
 
 const timezones = getAllTimezones();
 
@@ -453,7 +453,7 @@ export const SettingsPage: React.FC = () => {
                 const checked = e.target.checked;
                 if (checked) {
                   if (!user) return;
-                  const granted = await requestOneSignalPushPermission(user.id);
+                  const granted = await subscribeToPush(user.id);
                   if (granted) {
                     setPushRemindersEnabled(true);
                   } else {
@@ -461,8 +461,10 @@ export const SettingsPage: React.FC = () => {
                     setPushRemindersEnabled(false);
                   }
                 } else {
+                  if (user) {
+                    await unsubscribeFromPush(user.id);
+                  }
                   setPushRemindersEnabled(false);
-                  disableOneSignalPush();
                 }
               }}
             />

@@ -3,9 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Sun, Calendar, BarChart3, Settings, LogOut, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../stores/auth-store';
 import { useUserSettings } from '../hooks/useUserSettings';
-import { useNotificationReminders } from '../hooks/useNotificationReminders';
 import { Navigate } from 'react-router-dom';
-import { initOneSignalQuietly, logoutOneSignal } from '../lib/onesignal';
 
 const NAV_ITEMS = [
   { to: '/app', label: 'Today', icon: Sun, end: true },
@@ -32,11 +30,7 @@ export const AppLayout: React.FC = () => {
   const navigate = useNavigate();
   const { settings, loading } = useUserSettings();
 
-  React.useEffect(() => {
-    if (user) {
-      initOneSignalQuietly(user.id);
-    }
-  }, [user]);
+
 
   const [showWelcome, setShowWelcome] = React.useState(() => {
     return !sessionStorage.getItem('dayplanner_welcome_shown');
@@ -72,7 +66,6 @@ export const AppLayout: React.FC = () => {
   }
 
   const handleLogout = async () => {
-    logoutOneSignal();
     await signOut();
     navigate('/login');
   };
