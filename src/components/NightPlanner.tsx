@@ -59,7 +59,7 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
       return !isEaten && !isSkipped;
     })
   );
-  const gratitudeMissing = isStarted && (!entry?.night_gratitude_1?.trim() || !entry?.night_gratitude_2?.trim() || !entry?.night_gratitude_3?.trim());
+  const gratitudeMissing = isStarted && (!entry?.night_gratitude_1?.trim() && !entry?.night_gratitude_2?.trim() && !entry?.night_gratitude_3?.trim());
   const winMissing = isStarted && !entry?.night_win?.trim();
   const wentWellMissing = isStarted && !entry?.night_went_well?.trim();
   const improveMissing = isStarted && !entry?.night_improve?.trim();

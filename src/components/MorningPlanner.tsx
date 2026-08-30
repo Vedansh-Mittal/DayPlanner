@@ -43,8 +43,8 @@ export const MorningPlanner: React.FC<MorningPlannerProps> = ({
 
   const moodMissing = isStarted && (!entry?.morning_mood || !entry?.morning_mood_intensity);
   const whyMissing = isStarted && (!entry?.morning_why?.trim() || !motivations.length || (motivations.includes('Other') && !entry?.morning_motivation_other?.trim()));
-  const priorityMissing = isStarted && (priorities.length < 3 || priorities.some((p) => !p.text?.trim()));
-  const actionMissing = isStarted && (actionSteps.length < 5 || actionSteps.some((a) => !a.text?.trim()));
+  const priorityMissing = isStarted && !priorities.some((p) => p.text?.trim());
+  const actionMissing = isStarted && !actionSteps.some((a) => a.text?.trim());
   const brainDumpMissing = isStarted && !entry?.morning_brain_dump?.trim();
   const inspireMissing = isStarted && !entry?.morning_inspire?.trim();
 
