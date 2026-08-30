@@ -32,6 +32,7 @@ export const SettingsPage: React.FC = () => {
   const [waterGoal, setWaterGoal] = useState(settings?.water_goal || 8);
   const [emailReminders, setEmailReminders] = useState(settings?.email_reminders || false);
   const [pushRemindersEnabled, setPushRemindersEnabled] = useState(settings?.push_reminders_enabled || false);
+  const [hasInitialized, setHasInitialized] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
@@ -254,7 +255,7 @@ export const SettingsPage: React.FC = () => {
 
   // Sync local state when settings load
   React.useEffect(() => {
-    if (settings) {
+    if (settings && !hasInitialized) {
       setDisplayName(settings.display_name || '');
       setTimezone(settings.timezone);
       setMorningReminder(settings.morning_reminder || '08:00');
@@ -262,8 +263,9 @@ export const SettingsPage: React.FC = () => {
       setWaterGoal(settings.water_goal);
       setEmailReminders(settings.email_reminders);
       setPushRemindersEnabled(settings.push_reminders_enabled);
+      setHasInitialized(true);
     }
-  }, [settings]);
+  }, [settings, hasInitialized]);
 
   const filteredTz = tzSearch
     ? timezones.filter((tz) => tz.toLowerCase().includes(tzSearch.toLowerCase()))
@@ -460,6 +462,9 @@ export const SettingsPage: React.FC = () => {
               }
             }}
           />
+          <span className="text-sm font-semibold flex items-center gap-1.5">
+            <Bell size={14} /> Enable browser reminders
+          </span>
         </label>
 
         <div className="pt-2 border-t border-border/40 dark:border-dark-border/40 space-y-3">
