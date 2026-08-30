@@ -226,17 +226,11 @@ export function isMorningComplete(fields: any, priorities: any[] = [], actionSte
   if (!fields?.morning_brain_dump?.trim()) return false;
   if (!fields?.morning_inspire?.trim()) return false;
 
-  // All 3 priorities required
-  if (priorities.length < 3) return false;
-  for (let i = 0; i < 3; i++) {
-    if (!priorities[i]?.text || !priorities[i].text.trim()) return false;
-  }
+  // At least 1 priority required (not all 3)
+  if (!priorities.some((p: any) => p?.text && p.text.trim())) return false;
 
-  // All 5 action steps required
-  if (actionSteps.length < 5) return false;
-  for (let i = 0; i < 5; i++) {
-    if (!actionSteps[i]?.text || !actionSteps[i].text.trim()) return false;
-  }
+  // At least 1 action step required (not all 5)
+  if (!actionSteps.some((a: any) => a?.text && a.text.trim())) return false;
 
   return true;
 }
@@ -258,9 +252,8 @@ export function isMorningStarted(fields: any, priorities: any[] = [], actionStep
 export function isNightComplete(fields: any, meals: any[] = [], windDownItems: any[] = []): boolean {
   if (!fields?.night_mood) return false;
   if (!fields?.night_mood_intensity) return false;
-  if (!fields?.night_gratitude_1?.trim()) return false;
-  if (!fields?.night_gratitude_2?.trim()) return false;
-  if (!fields?.night_gratitude_3?.trim()) return false;
+  // At least 1 gratitude entry required (not all 3)
+  if (!fields?.night_gratitude_1?.trim() && !fields?.night_gratitude_2?.trim() && !fields?.night_gratitude_3?.trim()) return false;
   if (!fields?.night_win?.trim()) return false;
   if (!fields?.night_went_well?.trim()) return false;
   if (!fields?.night_improve?.trim()) return false;
