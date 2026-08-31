@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth-store';
 import { useThemeStore } from '../stores/theme-store';
+import { setWaterGoalForDate } from '../lib/water-goal-history';
 import type { UserSettings } from '../types/database';
 
 export function useUserSettings() {
@@ -41,6 +42,9 @@ export function useUserSettings() {
 
   const updateSettings = useCallback(async (updates: Partial<UserSettings>) => {
     if (!user) return;
+    if (typeof updates.water_goal === 'number') {
+      setWaterGoalForDate(updates.water_goal);
+    }
     const payload = { ...updates, user_id: user.id, updated_at: new Date().toISOString() };
 
     const { data, error } = await supabase

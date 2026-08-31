@@ -10,6 +10,8 @@ import { useMoodBackground } from '../hooks/useMoodBackground';
 import { formatFriendlyDate, getTodayStr, isMorningComplete, isMorningStarted, isNightComplete, isNightStarted } from '../lib/utils';
 import { ChevronLeft, ChevronRight, CalendarDays, Sun, Moon, StickyNote } from 'lucide-react';
 
+import { getWaterGoalForDate } from '../lib/water-goal-history';
+
 /** Parse and validate a date string from the URL, falling back to today */
 function getInitialDate(param: string | null): string {
   if (param) {
@@ -25,7 +27,7 @@ export const PlannerPage: React.FC = () => {
   const [dateStr, setDateStr] = useState(() => getInitialDate(dateParam));
   const [activeTab, setActiveTab] = useState<'morning' | 'night'>('morning');
   const { settings } = useUserSettings();
-  const waterGoal = settings?.water_goal || 8;
+  const waterGoal = getWaterGoalForDate(dateStr, settings?.water_goal || 8);
 
   // Keep dateStr in sync if URL param changes externally (e.g. browser back/forward)
   useEffect(() => {
