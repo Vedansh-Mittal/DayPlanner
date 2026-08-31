@@ -289,7 +289,7 @@ ${formattedEntries}
 
 QUESTION: ${question}`;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiApiKey}`;
 
     const geminiPayload = {
       systemInstruction: {
@@ -303,7 +303,7 @@ QUESTION: ${question}`;
       ],
       generationConfig: {
         temperature: 0.3,
-        maxOutputTokens: 500,
+        maxOutputTokens: 600,
       },
     };
 
@@ -313,10 +313,8 @@ QUESTION: ${question}`;
       body: JSON.stringify(geminiPayload),
     });
 
-    // Fallback to gemini-1.5-flash if 2.0 is not available on key
     if (!geminiRes.ok) {
-      console.warn('Gemini 2.0 failed, trying gemini-1.5-flash:', await geminiRes.text());
-      const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+      const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash:generateContent?key=${geminiApiKey}`;
       geminiRes = await fetch(fallbackUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -79,7 +79,6 @@ export async function queryInsights(
   // Pre-calculate stats
   const stats = calculateStats(entries);
 
-  // 1. Try Gemini AI directly if client-side API key exists
   const clientKey = (import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('daylight_gemini_key') || '').trim();
   if (clientKey) {
     try {
@@ -182,8 +181,8 @@ QUESTION: ${question}`;
   };
 
   const endpoints = [
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash:generateContent?key=${apiKey}`,
   ];
 
   for (const url of endpoints) {
