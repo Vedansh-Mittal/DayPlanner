@@ -409,50 +409,51 @@ export function useDailyEntry(dateStr: string) {
   /* ——— Field updaters ——— */
 
   const updateField = useCallback((field: keyof DailyEntry, value: any) => {
+    entryFieldsRef.current = { ...entryFieldsRef.current, [field]: value };
     setEntryFields((prev) => ({ ...prev, [field]: value }));
     scheduleSave();
   }, [scheduleSave]);
 
   const updatePriority = useCallback((index: number, field: keyof Priority, value: any) => {
-    setPriorities((prev) => {
-      const next = [...prev];
-      if (next[index]) next[index] = { ...next[index], [field]: value };
-      return next;
-    });
+    const next = [...prioritiesRef.current];
+    if (next[index]) next[index] = { ...next[index], [field]: value };
+    prioritiesRef.current = next;
+    setPriorities(next);
     scheduleSave();
   }, [scheduleSave]);
 
   const updateActionStep = useCallback((index: number, field: keyof ActionStep, value: any) => {
-    setActionSteps((prev) => {
-      const next = [...prev];
-      if (next[index]) next[index] = { ...next[index], [field]: value };
-      return next;
-    });
+    const next = [...actionStepsRef.current];
+    if (next[index]) next[index] = { ...next[index], [field]: value };
+    actionStepsRef.current = next;
+    setActionSteps(next);
     scheduleSave();
   }, [scheduleSave]);
 
   const updateMeal = useCallback((mealType: string, field: keyof Meal, value: any) => {
-    setMeals((prev) =>
-      prev.map((m: any) => {
-        if (m.meal_type !== mealType) return m;
-        if (field === 'time') {
-          const hasTime = !!(value && String(value).trim());
-          return { ...m, time: value, ate: hasTime };
-        }
-        if (field === 'ate') {
-          const hasTime = !!(m.time && String(m.time).trim());
-          return { ...m, ate: value && hasTime };
-        }
-        return { ...m, [field]: value };
-      }),
-    );
+    const next = mealsRef.current.map((m: any) => {
+      if (m.meal_type !== mealType) return m;
+      if (field === 'time') {
+        const hasTime = !!(value && String(value).trim());
+        return { ...m, time: value, ate: hasTime };
+      }
+      if (field === 'ate') {
+        const hasTime = !!(m.time && String(m.time).trim());
+        return { ...m, ate: value && hasTime };
+      }
+      return { ...m, [field]: value };
+    });
+    mealsRef.current = next;
+    setMeals(next);
     scheduleSave();
   }, [scheduleSave]);
 
   const updateWindDown = useCallback((itemType: string, completed: boolean) => {
-    setWindDownItems((prev) =>
-      prev.map((w: any) => w.item_type === itemType ? { ...w, completed } : w),
+    const next = windDownRef.current.map((w: any) =>
+      w.item_type === itemType ? { ...w, completed } : w
     );
+    windDownRef.current = next;
+    setWindDownItems(next);
     scheduleSave();
   }, [scheduleSave]);
 
