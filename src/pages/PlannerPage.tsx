@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { format, addDays, subDays, parse, isValid } from 'date-fns';
 import { useSearchParams } from 'react-router-dom';
 import { useDailyEntry } from '../hooks/useDailyEntry';
@@ -89,6 +89,45 @@ export const PlannerPage: React.FC = () => {
         return <span className="text-xs font-semibold text-yellow-700 bg-yellow-soft-light dark:bg-yellow-soft/20 px-2 py-0.5 rounded-full">In progress</span>;
       default:
         return <span className="text-xs font-semibold text-text-muted bg-cream-dark dark:bg-dark-surface-raised px-2 py-0.5 rounded-full">Not started</span>;
+    }
+  };
+
+  // Touch swipe gesture strictly scoped to Morning <-> Night tab content (§phone convenience)
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  const handleTabTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      // Ignore edge swipes (within 30px of screen edge) to preserve native OS back/forward navigation
+      if (touch.clientX < 30 || touch.clientX > window.innerWidth - 30) {
+        touchStartRef.current = null;
+        return;
+      }
+      touchStartRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        time: Date.now(),
+      };
+    }
+  };
+
+  const handleTabTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.changedTouches.length !== 1) return;
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    const duration = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+
+    // Must be a quick, intentful horizontal swipe (< 500ms duration, > 60px horizontal distance, 2x horizontal dominance)
+    if (duration < 500 && Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 2.0) {
+      if (deltaX < 0 && activeTab === 'morning') {
+        // Swiped Right to Left (finger moved left): Switch from Morning to Night
+        setActiveTab('night');
+      } else if (deltaX > 0 && activeTab === 'night') {
+        // Swiped Left to Right (finger moved right): Switch from Night to Morning
+        setActiveTab('morning');
+      }
     }
   };
 
@@ -194,42 +233,48 @@ export const PlannerPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Tab content */}
-      {activeTab === 'morning' ? (
-        <MorningPlanner
-          entry={entry}
-          priorities={priorities}
-          actionSteps={actionSteps}
-          updateField={updateField}
-          updatePriority={updatePriority}
-          updateActionStep={updateActionStep}
-          flushSave={flushSave}
-          disabled={isFuture}
-        />
-      ) : (
-        <NightPlanner
-          entry={entry}
-          medications={medications}
-          meals={meals}
-          windDownItems={windDownItems}
-          waterGoal={waterGoal}
-          updateField={updateField}
-          updateMedication={updateMedication}
-          addMedication={addMedication}
-          removeMedication={removeMedication}
-          updateMeal={updateMeal}
-          updateWindDown={updateWindDown}
-          flushSave={flushSave}
-          disabled={isFuture || isNightLockedToday}
-          lockedReason={
-            isFuture
-              ? 'Future dates are locked. Return on that day to log your night reflection.'
-              : isNightLockedToday
-              ? 'Night reflection unlocks at 6:00 PM today. Focus on your morning priorities for now!'
-              : undefined
-          }
-        />
-      )}
+      {/* Scoped Tab Content (Swipable on mobile) */}
+      <div
+        className="touch-pan-y"
+        onTouchStart={handleTabTouchStart}
+        onTouchEnd={handleTabTouchEnd}
+      >
+        {activeTab === 'morning' ? (
+          <MorningPlanner
+            entry={entry}
+            priorities={priorities}
+            actionSteps={actionSteps}
+            updateField={updateField}
+            updatePriority={updatePriority}
+            updateActionStep={updateActionStep}
+            flushSave={flushSave}
+            disabled={isFuture}
+          />
+        ) : (
+          <NightPlanner
+            entry={entry}
+            medications={medications}
+            meals={meals}
+            windDownItems={windDownItems}
+            waterGoal={waterGoal}
+            updateField={updateField}
+            updateMedication={updateMedication}
+            addMedication={addMedication}
+            removeMedication={removeMedication}
+            updateMeal={updateMeal}
+            updateWindDown={updateWindDown}
+            flushSave={flushSave}
+            disabled={isFuture || isNightLockedToday}
+            lockedReason={
+              isFuture
+                ? 'Future dates are locked. Return on that day to log your night reflection.'
+                : isNightLockedToday
+                ? 'Night reflection unlocks at 6:00 PM today. Focus on your morning priorities for now!'
+                : undefined
+            }
+          />
+        )}
+      </div>
     </div>
   );
 };
