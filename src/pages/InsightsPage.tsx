@@ -113,38 +113,6 @@ export const InsightsPage: React.FC = () => {
           </p>
         </div>
       )}
-
-      {/* Optional Custom Gemini Key for instant AI */}
-      <div className="pt-4 border-t border-border/50 dark:border-dark-border/50 text-center">
-        <details className="text-xs text-text-muted dark:text-dark-text-muted cursor-pointer inline-block text-left">
-          <summary className="hover:text-text-primary transition-colors font-medium">
-            ⚙️ AI Connection Settings (Optional Gemini Key)
-          </summary>
-          <div className="p-3 mt-2 bg-surface-raised dark:bg-dark-surface-raised rounded-xl border border-border dark:border-dark-border space-y-2 max-w-md mx-auto">
-            <p className="leading-relaxed">
-              To power deep reasoning with your own free Google Gemini API key:
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="password"
-                placeholder="Enter Gemini API Key (AIzaSy...)"
-                defaultValue={localStorage.getItem('daylight_gemini_key') || ''}
-                onChange={(e) => {
-                  if (e.target.value.trim()) {
-                    localStorage.setItem('daylight_gemini_key', e.target.value.trim());
-                  } else {
-                    localStorage.removeItem('daylight_gemini_key');
-                  }
-                }}
-                className="input-field text-xs py-1.5 flex-1"
-              />
-            </div>
-            <p className="text-[10px] text-text-muted">
-              Get a free key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="underline text-lavender font-semibold">Google AI Studio</a>. Saved locally in your browser.
-            </p>
-          </div>
-        </details>
-      </div>
     </div>
   );
 };
