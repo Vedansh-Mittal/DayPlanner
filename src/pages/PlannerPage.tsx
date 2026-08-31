@@ -37,14 +37,6 @@ export const PlannerPage: React.FC = () => {
     }
   }, [dateParam]);
 
-  const goToDate = useCallback((offset: number) => {
-    const d = parse(dateStr, 'yyyy-MM-dd', new Date());
-    const newDate = offset > 0 ? addDays(d, offset) : subDays(d, Math.abs(offset));
-    const newDateStr = format(newDate, 'yyyy-MM-dd');
-    setDateStr(newDateStr);
-    setSearchParams({ date: newDateStr }, { replace: true });
-  }, [dateStr, setSearchParams]);
-
   const {
     entry, priorities, actionSteps, medications, meals, windDownItems,
     loading, saveStatus, error,
@@ -53,6 +45,15 @@ export const PlannerPage: React.FC = () => {
     addMedication, removeMedication, updateMedication,
     flushSave,
   } = useDailyEntry(dateStr);
+
+  const goToDate = useCallback((offset: number) => {
+    flushSave();
+    const d = parse(dateStr, 'yyyy-MM-dd', new Date());
+    const newDate = offset > 0 ? addDays(d, offset) : subDays(d, Math.abs(offset));
+    const newDateStr = format(newDate, 'yyyy-MM-dd');
+    setDateStr(newDateStr);
+    setSearchParams({ date: newDateStr }, { replace: true });
+  }, [dateStr, setSearchParams, flushSave]);
 
   const todayStr = getTodayStr();
   const isToday = dateStr === todayStr;

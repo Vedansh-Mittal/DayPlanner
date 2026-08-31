@@ -10,7 +10,8 @@ import { isMorningComplete, isNightComplete } from '../lib/utils';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
-const DEBOUNCE_MS = 2000;
+// Reduced from 2000ms to 500ms for fast responsive auto-save
+const DEBOUNCE_MS = 500;
 
 /* ——— Default empty data ——— */
 
@@ -99,6 +100,24 @@ export function useDailyEntry(dateStr: string) {
   mealsRef.current = meals;
   windDownRef.current = windDownItems;
 
+  /* Helper to sync current state to local offline cache immediately */
+  const syncLocalCache = useCallback(() => {
+    saveToLocalCache(
+      dateStrRef.current,
+      {
+        ...entryFieldsRef.current,
+        id: entryIdRef.current || undefined,
+        morning_completed: isMorningComplete(entryFieldsRef.current, prioritiesRef.current, actionStepsRef.current),
+        night_completed: isNightComplete(entryFieldsRef.current, mealsRef.current, windDownRef.current),
+      },
+      prioritiesRef.current,
+      actionStepsRef.current,
+      mealsRef.current,
+      windDownRef.current,
+      medicationsRef.current
+    );
+  }, []);
+
   /* ——— Load entry for date ——— */
   const load = useCallback(async () => {
     if (!user) return;
@@ -106,6 +125,26 @@ export function useDailyEntry(dateStr: string) {
     setError(null);
     setSaveStatus('idle');
     dirtyRef.current = false;
+
+    // Check offline cache first for instant display
+    try {
+      const cacheStr = localStorage.getItem('daylight_offline_cache');
+      if (cacheStr) {
+        const cache = JSON.parse(cacheStr);
+        const cachedData = cache[dateStr];
+        if (cachedData) {
+          setEntryId(cachedData.id || null);
+          setEntryFields(extractFields(cachedData));
+          setPriorities(cachedData.priorities || defaultPriorities());
+          setActionSteps(cachedData.action_steps || defaultActions());
+          setMedications(cachedData.medications || []);
+          setMeals(cachedData.meals || defaultMeals());
+          setWindDownItems(cachedData.wind_down_items || defaultWindDown());
+        }
+      }
+    } catch (e) {
+      console.error('Cache read error:', e);
+    }
 
     const { data, error: fetchErr } = await supabase
       .from('daily_entries')
@@ -123,29 +162,6 @@ export function useDailyEntry(dateStr: string) {
 
     if (fetchErr) {
       console.error('Load entry error:', fetchErr);
-      try {
-        const cacheStr = localStorage.getItem('daylight_offline_cache');
-        if (cacheStr) {
-          const cache = JSON.parse(cacheStr);
-          const cachedData = cache[dateStr];
-          if (cachedData) {
-            console.log('Successfully loaded date from offline cache:', dateStr);
-            setEntryId(cachedData.id || null);
-            setEntryFields(extractFields(cachedData));
-            setPriorities(cachedData.priorities || defaultPriorities());
-            setActionSteps(cachedData.action_steps || defaultActions());
-            setMedications(cachedData.medications || []);
-            setMeals(cachedData.meals || defaultMeals());
-            setWindDownItems(cachedData.wind_down_items || defaultWindDown());
-            setLoading(false);
-            setSaveStatus('idle');
-            return;
-          }
-        }
-      } catch (cacheErr) {
-        console.error('Offline cache load error:', cacheErr);
-      }
-      setError('Failed to load entry');
       setLoading(false);
       return;
     }
@@ -187,7 +203,7 @@ export function useDailyEntry(dateStr: string) {
         data.medications || []
       );
     } else {
-      // No entry for this date → local defaults, not persisted yet
+      // No entry in DB yet -> initialize default fields
       setEntryId(null);
       setEntryFields({ ...DEFAULT_ENTRY_FIELDS });
       setPriorities(defaultPriorities());
@@ -202,19 +218,18 @@ export function useDailyEntry(dateStr: string) {
   useEffect(() => {
     load();
 
-    // Flush pending saves before page unload (refresh, close tab, navigate away)
     const handleBeforeUnload = () => {
-      if (dirtyRef.current && !savingRef.current) {
-        // Cancel any pending debounce and save immediately
+      if (dirtyRef.current) {
         if (debounceRef.current) clearTimeout(debounceRef.current);
+        syncLocalCache();
         doSave();
       }
     };
 
-    // Flush when tab becomes hidden (user switches app on mobile)
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && dirtyRef.current && !savingRef.current) {
+      if (document.visibilityState === 'hidden' && dirtyRef.current) {
         if (debounceRef.current) clearTimeout(debounceRef.current);
+        syncLocalCache();
         doSave();
       }
     };
@@ -224,53 +239,57 @@ export function useDailyEntry(dateStr: string) {
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      // Flush on unmount (navigating to a different date)
-      if (dirtyRef.current && !savingRef.current) {
+      if (dirtyRef.current) {
+        syncLocalCache();
         doSave();
       }
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [load]);
+  }, [load, syncLocalCache]);
 
   /* ——— Schedule / Flush save ——— */
 
   const scheduleSave = useCallback(() => {
     dirtyRef.current = true;
+    syncLocalCache();
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setSaveStatus('saving');
     debounceRef.current = setTimeout(() => {
       doSave();
     }, DEBOUNCE_MS);
-  }, []);
+  }, [syncLocalCache]);
 
-  /** Flush: cancel debounce and save immediately. Call this on blur. */
-  const flushSave = useCallback(() => {
-    if (!dirtyRef.current) return;
+  /** Flush: cancel debounce and save immediately. Call this on blur or date switch. */
+  const flushSave = useCallback(async () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    doSave();
-  }, []);
+    syncLocalCache();
+    if (dirtyRef.current) {
+      await doSave();
+    }
+  }, [syncLocalCache]);
 
   /* ——— Persist to Supabase ——— */
 
   const doSave = async () => {
-    if (!user || savingRef.current) return;
-    if (!dirtyRef.current) { setSaveStatus('idle'); return; }
+    if (!user) return;
+    if (!dirtyRef.current && !savingRef.current) { setSaveStatus('idle'); return; }
 
+    dirtyRef.current = false;
     savingRef.current = true;
     setSaveStatus('saving');
 
     try {
+      const targetDate = dateStrRef.current;
       const fields = entryFieldsRef.current;
 
-      // Compute completion strictly when core fields are filled (every field required except medications)
       const morningCompleted = isMorningComplete(fields, prioritiesRef.current, actionStepsRef.current);
       const nightCompleted = isNightComplete(fields, mealsRef.current, windDownRef.current);
 
       // 1. Upsert daily entry
       const entryPayload = {
         user_id: user.id,
-        entry_date: dateStrRef.current,
+        entry_date: targetDate,
         ...fields,
         morning_completed: morningCompleted,
         night_completed: nightCompleted,
@@ -289,14 +308,13 @@ export function useDailyEntry(dateStr: string) {
       setEntryId(savedId);
       entryIdRef.current = savedId;
 
-      // Update local completion flags
       setEntryFields((prev) => ({
         ...prev,
         morning_completed: morningCompleted,
         night_completed: nightCompleted,
       }));
 
-      // 2. Upsert priorities (fixed 3 slots)
+      // 2. Upsert priorities
       const pRows = prioritiesRef.current.map((p: any) => ({
         daily_entry_id: savedId,
         user_id: user.id,
@@ -310,7 +328,7 @@ export function useDailyEntry(dateStr: string) {
         .select();
       if (pData) setPriorities(pData as Priority[]);
 
-      // 3. Upsert action steps (fixed 5 slots)
+      // 3. Upsert action steps
       const aRows = actionStepsRef.current.map((a: any) => ({
         daily_entry_id: savedId,
         user_id: user.id,
@@ -324,7 +342,7 @@ export function useDailyEntry(dateStr: string) {
         .select();
       if (aData) setActionSteps(aData as ActionStep[]);
 
-      // 4. Upsert meals (fixed 4 types)
+      // 4. Upsert meals
       const mRows = mealsRef.current.map((m: any) => ({
         daily_entry_id: savedId,
         user_id: user.id,
@@ -339,7 +357,7 @@ export function useDailyEntry(dateStr: string) {
         .select();
       if (mData) setMeals(mData as Meal[]);
 
-      // 5. Upsert wind-down items (fixed 5 types)
+      // 5. Upsert wind-down items
       const wRows = windDownRef.current.map((w: any) => ({
         daily_entry_id: savedId,
         user_id: user.id,
@@ -352,7 +370,7 @@ export function useDailyEntry(dateStr: string) {
         .select();
       if (wData) setWindDownItems(wData as WindDownItem[]);
 
-      // 6. Medications: update existing ones by ID (new ones handled by addMedication)
+      // 6. Medications
       for (const med of medicationsRef.current) {
         if (med.id) {
           await supabase.from('medications')
@@ -362,12 +380,11 @@ export function useDailyEntry(dateStr: string) {
         }
       }
 
-      dirtyRef.current = false;
       setSaveStatus('saved');
       setError(null);
 
       saveToLocalCache(
-        dateStrRef.current,
+        targetDate,
         {
           ...fields,
           id: savedId,
@@ -389,7 +406,7 @@ export function useDailyEntry(dateStr: string) {
     }
   };
 
-  /* ——— Field updaters (LOCAL-ONLY, no network call) ——— */
+  /* ——— Field updaters ——— */
 
   const updateField = useCallback((field: keyof DailyEntry, value: any) => {
     setEntryFields((prev) => ({ ...prev, [field]: value }));
@@ -424,7 +441,6 @@ export function useDailyEntry(dateStr: string) {
         }
         if (field === 'ate') {
           const hasTime = !!(m.time && String(m.time).trim());
-          // Only allow ate=true if a time is specified
           return { ...m, ate: value && hasTime };
         }
         return { ...m, [field]: value };
@@ -440,13 +456,10 @@ export function useDailyEntry(dateStr: string) {
     scheduleSave();
   }, [scheduleSave]);
 
-  /* ——— Medications (variable-length, need special handling) ——— */
+  /* ——— Medications ——— */
 
-  /** Ensure entry is persisted before adding a medication row */
   const ensureEntryPersisted = async (): Promise<string | null> => {
     if (entryIdRef.current) return entryIdRef.current;
-
-    // Flush any pending changes first
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     const { data, error: err } = await supabase
