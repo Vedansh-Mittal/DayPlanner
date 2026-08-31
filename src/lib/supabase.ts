@@ -17,6 +17,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 export const getAppUrl = () => {
+  // Use window.location.origin dynamically for browser redirects
   if (typeof window !== 'undefined' && window.location) {
     return window.location.origin;
   }
