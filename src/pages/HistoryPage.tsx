@@ -232,21 +232,22 @@ export const HistoryPage: React.FC = () => {
              return (
               <button
                 key={dateStr}
-                className={`cal-day min-h-[60px] p-1.5 flex flex-col items-start justify-between overflow-hidden transition-all relative ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : ''}`}
+                className={`cal-day min-h-[60px] p-1.5 flex flex-col items-start justify-between overflow-hidden transition-all ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : ''}`}
                 onClick={() => !isFutureDate && navigateToDate(dateStr)}
                 disabled={isFutureDate}
                 title={isFutureDate ? 'Future date locked' : undefined}
                 style={moodColor ? { backgroundColor: `${moodColor}22` } : undefined}
               >
-                <span className="font-bold text-xs">{format(day, 'd')}</span>
-                
-                {isFutureDate ? (
-                  <span className="absolute top-1 right-1 text-[10px] opacity-60">🔒</span>
-                ) : isFullDone ? (
-                  <div className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100 dark:ring-emerald-900/30" title="Fully Completed" />
-                ) : isPartialDone ? (
-                  <div className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-100 dark:ring-amber-900/30" title="Partially Completed" />
-                ) : null}
+                <div className="flex items-center gap-1.5 w-full">
+                  <span className="font-bold text-xs">{format(day, 'd')}</span>
+                  {isFutureDate ? (
+                    <span className="text-[10px] opacity-60">🔒</span>
+                  ) : isFullDone ? (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100 dark:ring-emerald-900/30 block shrink-0" title="Fully Completed" />
+                  ) : isPartialDone ? (
+                    <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-100 dark:ring-amber-900/30 block shrink-0" title="Partially Completed" />
+                  ) : null}
+                </div>
 
                 {/* Text snippet preview */}
                 {snippet && !isFutureDate && (
