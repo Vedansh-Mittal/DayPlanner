@@ -586,6 +586,7 @@ export function saveToLocalCache(
     const cacheStr = localStorage.getItem('daylight_offline_cache') || '{}';
     const cache = JSON.parse(cacheStr);
     cache[date] = {
+      ...(cache[date] || {}),
       ...entry,
       priorities,
       action_steps: actionSteps,

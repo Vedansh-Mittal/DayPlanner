@@ -26,7 +26,7 @@ export const HistoryPage: React.FC = () => {
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // Load calendar data for current month
+  // Load calendar data for current month (merging Supabase + latest local offline cache)
   const loadCalendar = useCallback(async () => {
     if (!user) return;
     setLoadingCal(true);
@@ -44,11 +44,34 @@ export const HistoryPage: React.FC = () => {
     (data || []).forEach((e: any) => {
       map[e.entry_date] = e;
     });
+
+    // Merge offline cache so instant edits on PlannerPage are immediately visible in History calendar!
+    try {
+      const cacheStr = localStorage.getItem('daylight_offline_cache');
+      if (cacheStr) {
+        const cache = JSON.parse(cacheStr);
+        Object.keys(cache).forEach((d) => {
+          if (d >= monthStart && d <= monthEnd) {
+            map[d] = {
+              ...(map[d] || {}),
+              ...cache[d],
+            };
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Error merging offline cache into calendar:', e);
+    }
+
     setCalendarData(map);
     setLoadingCal(false);
   }, [user, currentMonth]);
 
-  useEffect(() => { loadCalendar(); }, [loadCalendar]);
+  useEffect(() => {
+    loadCalendar();
+    window.addEventListener('focus', loadCalendar);
+    return () => window.removeEventListener('focus', loadCalendar);
+  }, [loadCalendar]);
 
   // Derived memory statistics
   const monthEntries = Object.values(calendarData);
