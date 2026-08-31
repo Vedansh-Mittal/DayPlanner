@@ -318,7 +318,7 @@ export const HistoryPage: React.FC = () => {
              return (
               <button
                 key={dateStr}
-                className={`cal-day min-h-[50px] sm:min-h-[64px] p-1 sm:p-2 flex flex-col justify-between overflow-hidden tap-spring rounded-lg sm:rounded-2xl border border-border/50 dark:border-dark-border/50 ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : 'hover:scale-[1.02] hover:shadow-md'}`}
+                className={`cal-day aspect-square p-1 sm:p-2 flex flex-col justify-between overflow-hidden tap-spring rounded-lg sm:rounded-xl border border-border/50 dark:border-dark-border/50 ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : 'hover:scale-[1.02] hover:shadow-md'}`}
                 onClick={() => !isFutureDate && navigateToDate(dateStr)}
                 disabled={isFutureDate}
                 title={isFutureDate ? 'Future date locked' : undefined}
