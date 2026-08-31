@@ -1,6 +1,7 @@
 import React from 'react';
 import { MoodSelector } from './MoodSelector';
-import { MOTIVATION_OPTIONS } from '../types/database';
+import { MotivationPicker } from './MotivationPicker';
+import { TactileCheckbox } from './TactileCheckbox';
 import type { DailyEntry, Priority, ActionStep } from '../types/database';
 import { Sparkles, Target, Zap, Brain, Star } from 'lucide-react';
 
@@ -70,7 +71,7 @@ export const MorningPlanner: React.FC<MorningPlannerProps> = ({
         />
       </section>
 
-      {/* Motivation */}
+      {/* Motivation (§7) */}
       <section className={`card transition-all ${whyMissing ? 'border-amber-300 dark:border-amber-700/60 ring-2 ring-amber-200/50 dark:ring-amber-900/30' : ''}`}>
         <h3 className="section-title">
           <Star size={18} className="text-lavender" />
@@ -84,39 +85,15 @@ export const MorningPlanner: React.FC<MorningPlannerProps> = ({
         <p className="text-sm text-text-secondary dark:text-dark-text-secondary mb-3">
           What's fueling me today?
         </p>
-        <div className="space-y-2">
-          {MOTIVATION_OPTIONS.map((m) => (
-            <label key={m} className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                className="checkbox-custom"
-                checked={motivations.includes(m)}
-                onChange={() => toggleMotivation(m)}
-              />
-              <span className="text-sm font-medium">{m}</span>
-            </label>
-          ))}
-          {/* Other */}
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              className="checkbox-custom"
-              checked={motivations.includes('Other')}
-              onChange={() => toggleMotivation('Other')}
-            />
-            <span className="text-sm font-medium">Other</span>
-          </label>
-          {motivations.includes('Other') && (
-            <input
-              type="text"
-              className="input-field ml-8"
-              placeholder="What else motivates you?"
-              value={entry?.morning_motivation_other || ''}
-              onChange={(e) => updateField('morning_motivation_other', e.target.value)}
-              onBlur={flushSave}
-            />
-          )}
-        </div>
+        
+        <MotivationPicker
+          selectedMotivations={motivations}
+          otherText={entry?.morning_motivation_other || ''}
+          onToggle={toggleMotivation}
+          onOtherChange={(val) => updateField('morning_motivation_other', val)}
+          onBlur={flushSave}
+          disabled={disabled}
+        />
 
         {/* My why today */}
         <div className="mt-4">
@@ -134,7 +111,7 @@ export const MorningPlanner: React.FC<MorningPlannerProps> = ({
         </div>
       </section>
 
-      {/* Priorities */}
+      {/* Priorities (§6) */}
       <section className={`card transition-all ${priorityMissing ? 'border-amber-300 dark:border-amber-700/60 ring-2 ring-amber-200/50 dark:ring-amber-900/30' : ''}`}>
         <h3 className="section-title">
           <Target size={18} className="text-pink-soft" />
@@ -151,11 +128,11 @@ export const MorningPlanner: React.FC<MorningPlannerProps> = ({
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
             <div key={i} className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                className="checkbox-custom"
+              <TactileCheckbox
                 checked={priorities[i]?.completed || false}
-                onChange={(e) => updatePriority(i, 'completed', e.target.checked)}
+                onChange={(checked) => updatePriority(i, 'completed', checked)}
+                disabled={disabled}
+                ariaLabel={`Priority ${i + 1} completion`}
               />
               <span className="text-sm font-bold text-text-muted w-5">{i + 1}.</span>
               <input
@@ -171,7 +148,7 @@ export const MorningPlanner: React.FC<MorningPlannerProps> = ({
         </div>
       </section>
 
-      {/* Action Steps */}
+      {/* Action Steps (§6) */}
       <section className={`card transition-all ${actionMissing ? 'border-amber-300 dark:border-amber-700/60 ring-2 ring-amber-200/50 dark:ring-amber-900/30' : ''}`}>
         <h3 className="section-title">
           <Zap size={18} className="text-peach" />
@@ -188,11 +165,11 @@ export const MorningPlanner: React.FC<MorningPlannerProps> = ({
         <div className="space-y-3">
           {[0, 1, 2, 3, 4].map((i) => (
             <div key={i} className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                className="checkbox-custom"
+              <TactileCheckbox
                 checked={actionSteps[i]?.completed || false}
-                onChange={(e) => updateActionStep(i, 'completed', e.target.checked)}
+                onChange={(checked) => updateActionStep(i, 'completed', checked)}
+                disabled={disabled}
+                ariaLabel={`Step ${i + 1} completion`}
               />
               <input
                 type="text"

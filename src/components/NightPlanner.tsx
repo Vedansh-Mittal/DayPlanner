@@ -1,11 +1,14 @@
 import React from 'react';
 import { MoodSelector } from './MoodSelector';
+import { FluidWaterTracker } from './FluidWaterTracker';
+import { HabitRingTarget } from './HabitRingTarget';
+import { TactileCheckbox } from './TactileCheckbox';
 import {
   MEAL_TYPES, WIND_DOWN_TYPES,
   type DailyEntry, type Medication, type Meal, type WindDownItem,
 } from '../types/database';
 import {
-  Moon, Pill, UtensilsCrossed, Droplets, Heart, Trophy,
+  Moon, Pill, UtensilsCrossed, Heart, Trophy,
   ThumbsUp, Lightbulb, Brain, Star, Plus, Trash2, Shield,
 } from 'lucide-react';
 
@@ -125,11 +128,11 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
               >
                 {/* Mobile top row: Checkbox + Name + Trash */}
                 <div className="flex items-center gap-2 w-full md:contents">
-                  <input
-                    type="checkbox"
-                    className="checkbox-custom shrink-0"
+                  <TactileCheckbox
                     checked={med.taken}
-                    onChange={(e) => updateMedication(med.id, 'taken', e.target.checked)}
+                    onChange={(checked) => updateMedication(med.id, 'taken', checked)}
+                    disabled={disabled}
+                    ariaLabel={`${med.name || 'Medication'} taken`}
                   />
                   <input
                     type="text"
@@ -327,48 +330,18 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
           })}
         </div>
 
-        {/* Water */}
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <Droplets size={18} className="text-blue-soft" />
-            <span className="text-sm font-semibold">Water</span>
-            <span className="text-sm font-bold text-blue-soft ml-auto">
-              {waterCount} of {waterGoal} glasses
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="water-btn"
-              onClick={() => updateField('water_count', Math.max(0, waterCount - 1))}
-              aria-label="Decrease water"
-            >
-              −
-            </button>
-            {/* Visual water drops */}
-            <div className="flex gap-1 flex-wrap flex-1">
-              {Array.from({ length: waterGoal }, (_, i) => (
-                <div
-                  key={i}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-colors ${
-                    i < waterCount
-                      ? 'bg-blue-soft text-white'
-                      : 'bg-blue-soft-light dark:bg-dark-surface-raised text-blue-soft/40'
-                  }`}
-                >
-                  💧
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="water-btn"
-              onClick={() => updateField('water_count', waterCount + 1)}
-              aria-label="Increase water"
-            >
-              +
-            </button>
-          </div>
+        {/* Water Tracker Flagship (§3) */}
+        <div className="pt-4 border-t border-border/50 dark:border-dark-border/50">
+          <FluidWaterTracker
+            waterCount={waterCount}
+            waterGoal={waterGoal}
+            dateStr={entry?.entry_date || ''}
+            onWaterChange={(val) => {
+              updateField('water_count', val);
+              flushSave();
+            }}
+            disabled={disabled}
+          />
         </div>
       </section>
 
@@ -532,20 +505,19 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
             </span>
           )}
         </h3>
-        <div className="flex flex-wrap gap-3 justify-center">
+        {/* Habit Rings for Wind-down (§6) */}
+        <div className="flex flex-wrap gap-3.5 justify-center pt-1">
           {WIND_DOWN_TYPES.map((wd) => {
             const item = windDownItems.find((w) => w.item_type === wd.value);
             return (
-              <button
+              <HabitRingTarget
                 key={wd.value}
-                type="button"
-                className={`wind-down-toggle ${item?.completed ? 'completed' : ''}`}
-                onClick={() => updateWindDown(wd.value, !item?.completed)}
-                aria-pressed={item?.completed || false}
-              >
-                <span className="text-xl">{wd.emoji}</span>
-                <span>{wd.label}</span>
-              </button>
+                label={wd.label}
+                emoji={wd.emoji}
+                completed={item?.completed || false}
+                onToggle={() => updateWindDown(wd.value, !item?.completed)}
+                disabled={disabled}
+              />
             );
           })}
         </div>

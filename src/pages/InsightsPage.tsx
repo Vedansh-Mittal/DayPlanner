@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/auth-store';
+import { supabase } from '../lib/supabase';
 import { queryInsights, SUGGESTED_QUESTIONS, type InsightResponse } from '../lib/insights-engine';
-import { Sparkles, Send, Loader2, HeartHandshake } from 'lucide-react';
+import { TrendSparkline, type DataPoint } from '../components/TrendSparkline';
+import { Sparkles, Send, Loader2, HeartHandshake, TrendingUp } from 'lucide-react';
 
 /* Inline formatter for bold headers and styled quotes */
 function renderInlineTokens(text: string) {
@@ -107,6 +109,47 @@ export const InsightsPage: React.FC = () => {
   const [question, setQuestion] = useState('');
   const [result, setResult] = useState<InsightResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [moodTrend, setMoodTrend] = useState<DataPoint[]>([]);
+  const [waterTrend, setWaterTrend] = useState<DataPoint[]>([]);
+
+  // Load past 14-day trends for visual timelines (§8)
+  useEffect(() => {
+    if (!user) return;
+    const userId = user.id;
+    async function loadTrends() {
+      const { data } = await supabase
+        .from('daily_entries')
+        .select('entry_date, morning_mood_intensity, night_mood_intensity, water_count')
+        .eq('user_id', userId)
+        .order('entry_date', { ascending: true })
+        .limit(14);
+
+      if (data && data.length > 0) {
+        const mPoints: DataPoint[] = [];
+        const wPoints: DataPoint[] = [];
+
+        data.forEach((row) => {
+          const intensity = row.night_mood_intensity || row.morning_mood_intensity;
+          if (intensity) {
+            mPoints.push({
+              date: row.entry_date.slice(5), // MM-DD
+              value: intensity,
+            });
+          }
+          if (typeof row.water_count === 'number') {
+            wPoints.push({
+              date: row.entry_date.slice(5),
+              value: row.water_count,
+            });
+          }
+        });
+
+        setMoodTrend(mPoints);
+        setWaterTrend(wPoints);
+      }
+    }
+    loadTrends();
+  }, [user]);
 
   const ask = async (q: string) => {
     if (!q.trim() || !user) return;
@@ -138,12 +181,38 @@ export const InsightsPage: React.FC = () => {
         </p>
       </div>
 
+      {/* Visual Trend Timelines (§8) */}
+      {(moodTrend.length >= 2 || waterTrend.length >= 2) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {moodTrend.length >= 2 && (
+            <div className="card">
+              <TrendSparkline
+                data={moodTrend}
+                title="Mood Rhythm (1-5)"
+                unit="pts"
+                strokeColor="#9B8AC4"
+              />
+            </div>
+          )}
+          {waterTrend.length >= 2 && (
+            <div className="card">
+              <TrendSparkline
+                data={waterTrend}
+                title="Hydration Trend"
+                unit="glasses"
+                strokeColor="#60A5FA"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Suggested questions */}
       <div className="flex flex-wrap gap-2">
         {SUGGESTED_QUESTIONS.map((sq) => (
           <button
             key={sq}
-            className="btn-secondary text-sm py-2 px-3"
+            className="btn-secondary text-sm py-2 px-3 tap-spring"
             onClick={() => ask(sq)}
             disabled={loading}
           >
@@ -163,7 +232,7 @@ export const InsightsPage: React.FC = () => {
           onKeyDown={(e) => e.key === 'Enter' && ask(question)}
         />
         <button
-          className="btn-primary px-4"
+          className="btn-primary px-4 tap-spring"
           onClick={() => ask(question)}
           disabled={loading || !question.trim()}
         >

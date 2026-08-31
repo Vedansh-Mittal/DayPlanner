@@ -6,6 +6,7 @@ import { useUserSettings } from '../hooks/useUserSettings';
 import { SaveStatusIndicator } from '../components/SaveStatus';
 import { MorningPlanner } from '../components/MorningPlanner';
 import { NightPlanner } from '../components/NightPlanner';
+import { useMoodBackground } from '../hooks/useMoodBackground';
 import { formatFriendlyDate, getTodayStr, isMorningComplete, isMorningStarted, isNightComplete, isNightStarted } from '../lib/utils';
 import { ChevronLeft, ChevronRight, CalendarDays, Sun, Moon, StickyNote } from 'lucide-react';
 
@@ -54,6 +55,9 @@ export const PlannerPage: React.FC = () => {
   const todayStr = getTodayStr();
   const isToday = dateStr === todayStr;
   const isFuture = dateStr > todayStr;
+
+  // Apply subtle ambient mood mesh gradient (§4)
+  useMoodBackground(entry?.morning_mood || entry?.night_mood);
 
   // Lock night planner before 6 PM (18:00) on today
   const currentHour = new Date().getHours();

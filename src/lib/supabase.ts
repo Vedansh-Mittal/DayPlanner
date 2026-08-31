@@ -16,4 +16,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-export const getAppUrl = () => import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+export const getAppUrl = () => {
+  if (typeof window !== 'undefined' && window.location) {
+    return window.location.origin;
+  }
+  return import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+};

@@ -111,9 +111,9 @@ export const AppLayout: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-cream dark:bg-dark-bg transition-colors duration-300">
+    <div className="min-h-screen flex flex-col md:flex-row ambient-mood-bg transition-colors duration-300">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-60 p-4 border-r border-border dark:border-dark-border bg-surface/50 dark:bg-dark-surface/50">
+      <aside className="hidden md:flex flex-col w-60 p-4 border-r border-border/70 dark:border-dark-border/70 bg-surface/80 dark:bg-dark-surface/80 backdrop-blur-md">
         {/* Logo */}
         <div className="flex items-center gap-2 px-3 mb-8">
           <Sun size={24} className="text-lavender" />
@@ -129,7 +129,7 @@ export const AppLayout: React.FC = () => {
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              className={({ isActive }) => `nav-link tap-spring ${isActive ? 'active' : ''}`}
             >
               <item.icon size={20} />
               {item.label}
@@ -138,7 +138,7 @@ export const AppLayout: React.FC = () => {
         </nav>
 
         {/* Logout */}
-        <button onClick={handleLogout} className="nav-link text-left mt-auto hover:text-red-500">
+        <button onClick={handleLogout} className="nav-link tap-spring text-left mt-auto hover:text-red-500">
           <LogOut size={20} />
           Log out
         </button>
@@ -151,17 +151,17 @@ export const AppLayout: React.FC = () => {
         </div>
       </main>
 
-      {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface dark:bg-dark-surface border-t border-border dark:border-dark-border flex justify-around py-2 px-1 z-50">
+      {/* Mobile bottom nav with backdrop blur (§5) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface/85 dark:bg-dark-surface/85 backdrop-blur-lg border-t border-border/60 dark:border-dark-border/60 flex justify-around py-2 px-1 z-50 shadow-lg">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+              `flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs font-semibold tap-spring transition-colors ${
                 isActive
-                  ? 'text-lavender-dark dark:text-lavender'
+                  ? 'text-lavender-dark dark:text-lavender font-bold'
                   : 'text-text-muted dark:text-dark-text-muted'
               }`
             }
