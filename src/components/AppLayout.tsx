@@ -57,11 +57,25 @@ export const AppLayout: React.FC = () => {
 
 
 
+  // Loading fallback while settings are being fetched from Supabase
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-cream dark:bg-dark-bg">
+        <div className="flex flex-col items-center gap-3 fade-in select-none">
+          <Sun size={36} className="text-lavender animate-spin" style={{ animationDuration: '3s' }} />
+          <span className="text-xs font-semibold text-text-muted dark:text-dark-text-muted">
+            Loading your space…
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   // If loaded and not onboarded, redirect to onboarding
-  if (!loading && settings && !settings.onboarding_complete) {
+  if (settings && !settings.onboarding_complete) {
     return <Navigate to="/onboarding" replace />;
   }
-  if (!loading && !settings) {
+  if (!settings) {
     return <Navigate to="/onboarding" replace />;
   }
 

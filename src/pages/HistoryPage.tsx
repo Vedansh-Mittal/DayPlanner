@@ -7,7 +7,7 @@ import {
   getDay, addMonths, subMonths, parse, isToday,
 } from 'date-fns';
 import { MOOD_COLOR_MAP, MOOD_OPTIONS, type MoodOption, type SearchResult, type DailyEntryFull } from '../types/database';
-import { isMorningComplete, isNightComplete, truncate, extractSnippet } from '../lib/utils';
+import { isMorningComplete, isMorningStarted, isNightComplete, isNightStarted, truncate, extractSnippet } from '../lib/utils';
 import {
   ChevronLeft, ChevronRight, Search, Calendar, X,
   Sun as SunIcon, Moon, Loader2, Flame, Sparkles, BookOpen,
@@ -303,11 +303,14 @@ export const HistoryPage: React.FC = () => {
               ? data.night_completed || isNightComplete(data, data.meals || [], data.wind_down_items || [])
               : false;
             const isFullDone = isMorningDone && isNightDone;
+
             const isPartialDone = data
               ? !isFullDone && (
                   isMorningDone ||
                   isNightDone ||
                   !!data.daily_note?.trim() ||
+                  isMorningStarted(data, data.priorities || [], data.action_steps || []) ||
+                  isNightStarted(data, data.meals || [], data.wind_down_items || []) ||
                   (typeof data.water_count === 'number' && data.water_count > 0)
                 )
               : false;
@@ -315,28 +318,28 @@ export const HistoryPage: React.FC = () => {
              return (
               <button
                 key={dateStr}
-                className={`cal-day min-h-[60px] p-2 flex flex-col justify-between overflow-hidden tap-spring rounded-2xl border border-border/50 dark:border-dark-border/50 ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : 'hover:scale-[1.03] hover:shadow-md'}`}
+                className={`cal-day min-h-[50px] sm:min-h-[64px] p-1 sm:p-2 flex flex-col justify-between overflow-hidden tap-spring rounded-lg sm:rounded-2xl border border-border/50 dark:border-dark-border/50 ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : 'hover:scale-[1.02] hover:shadow-md'}`}
                 onClick={() => !isFutureDate && navigateToDate(dateStr)}
                 disabled={isFutureDate}
                 title={isFutureDate ? 'Future date locked' : undefined}
                 style={moodColor ? { backgroundColor: `${moodColor}25` } : undefined}
               >
                 {/* Header row: Day Number + Completion Dot (Green / Yellow / Lock) */}
-                <div className="flex items-center justify-between w-full">
+                <div className="flex items-center justify-between w-full gap-0.5">
                   <span className="font-bold text-xs text-text-primary dark:text-dark-text">{format(day, 'd')}</span>
                   {isFutureDate ? (
-                    <span className="text-[10px] opacity-60">🔒</span>
+                    <span className="text-[10px] opacity-60 shrink-0">🔒</span>
                   ) : isFullDone ? (
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900/40 block shrink-0" title="Fully Completed" />
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500 ring-1 sm:ring-2 ring-emerald-200 dark:ring-emerald-900/40 block shrink-0" title="Fully Completed" />
                   ) : isPartialDone ? (
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-200 dark:ring-amber-900/40 block shrink-0" title="Partially Completed" />
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-amber-400 ring-1 sm:ring-2 ring-amber-200 dark:ring-amber-900/40 block shrink-0" title="Partially Completed" />
                   ) : null}
                 </div>
 
                 {/* Daily Note snippet preview ONLY (no mood emojis) */}
                 {!isFutureDate && data?.daily_note?.trim() && (
-                  <div className="w-full mt-auto pt-1">
-                    <span className="text-[9px] font-medium text-text-secondary dark:text-dark-text-secondary leading-tight truncate block text-left" title={data.daily_note.trim()}>
+                  <div className="w-full mt-auto pt-0.5">
+                    <span className="text-[8px] sm:text-[9px] font-medium text-text-secondary dark:text-dark-text-secondary leading-tight truncate block text-left" title={data.daily_note.trim()}>
                       {truncate(data.daily_note.trim(), 10)}
                     </span>
                   </div>
