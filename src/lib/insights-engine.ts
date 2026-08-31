@@ -19,6 +19,28 @@ export async function queryInsights(
   userId: string,
   question: string,
 ): Promise<InsightResponse> {
+  // 1. First, attempt to invoke the AI Insights Edge Function
+  try {
+    const { data, error } = await supabase.functions.invoke('query-insights', {
+      body: { question },
+    });
+
+    if (!error && data && data.summary) {
+      return {
+        dateRange: data.dateRange || { start: '', end: '' },
+        summary: data.summary,
+        stats: data.stats || {},
+        insufficientData: !!data.insufficientData,
+      };
+    }
+    if (error) {
+      console.warn('Edge function returned error, falling back to local analysis:', error);
+    }
+  } catch (err) {
+    console.warn('Failed to reach AI insights function, using local engine:', err);
+  }
+
+  // 2. Fallback to deterministic local engine
   // Determine date range from question
   const range = parseDateRange(question);
 
@@ -53,6 +75,32 @@ export async function queryInsights(
 
   // Route to specific analysis
   const q = question.toLowerCase();
+
+  if (q.includes('gratitude') || q.includes('grateful')) {
+    const gratitudes = entries.flatMap((e) => [e.night_gratitude_1, e.night_gratitude_2, e.night_gratitude_3]).filter(Boolean);
+    if (gratitudes.length > 0) {
+      return {
+        dateRange: range,
+        summary: `🌸 Things You Were Grateful For (${range.start} to ${range.end}):\n\n` +
+          gratitudes.slice(0, 10).map((g) => `• ${g}`).join('\n'),
+        stats: { count: gratitudes.length },
+        insufficientData: false,
+      };
+    }
+  }
+
+  if (q.includes('brain dump') || q.includes('thoughts')) {
+    const dumps = entries.map((e) => ({ date: e.entry_date, morning: e.morning_brain_dump, night: e.night_brain_dump })).filter((d) => d.morning || d.night);
+    if (dumps.length > 0) {
+      return {
+        dateRange: range,
+        summary: `🧠 Brain Dump Observations (${range.start} to ${range.end}):\n\n` +
+          dumps.slice(0, 5).map((d) => `📅 **${d.date}**:\n${d.morning ? `• Morning: ${d.morning}\n` : ''}${d.night ? `• Night: ${d.night}\n` : ''}`).join('\n'),
+        stats: { dumpCount: dumps.length },
+        insufficientData: false,
+      };
+    }
+  }
 
   if (q.includes('mood')) {
     return moodAnalysis(entries, range);
@@ -439,9 +487,10 @@ function getTopWords(text: string, n: number): string[] {
 /* ===== Suggested questions ===== */
 
 export const SUGGESTED_QUESTIONS = [
-  'How was my mood this month?',
-  'Which activities make me happiest?',
-  'How was my water intake last week?',
-  'What patterns do you notice in my entries?',
-  'Summarize my last seven days.',
+  'What things am I most grateful for?',
+  'What makes my mood happy?',
+  'What do you make of my recent brain dumps?',
+  'What is the most common improvement I need to make?',
+  'How are my morning reflections connected to my mood?',
+  'Summarize my wins and achievements.',
 ];

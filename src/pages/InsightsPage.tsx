@@ -85,12 +85,12 @@ export const InsightsPage: React.FC = () => {
                   <p className="whitespace-pre-line">{result.summary}</p>
                 </div>
               ) : (
-                <div>
-                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-text-primary dark:text-dark-text">
+                <div className="space-y-3">
+                  <div className="text-sm leading-relaxed text-text-primary dark:text-dark-text whitespace-pre-wrap">
                     {result.summary}
-                  </pre>
+                  </div>
                   {result.dateRange.start && (
-                    <p className="text-xs text-text-muted dark:text-dark-text-muted mt-3 pt-3 border-t border-border dark:border-dark-border">
+                    <p className="text-xs text-text-muted dark:text-dark-text-muted pt-3 border-t border-border dark:border-dark-border">
                       📅 Data range: {result.dateRange.start} to {result.dateRange.end}
                     </p>
                   )}
