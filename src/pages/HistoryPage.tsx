@@ -4,13 +4,13 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth-store';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
-  getDay, addMonths, subMonths, isSameDay, parse, isToday,
+  getDay, addMonths, subMonths, parse, isToday,
 } from 'date-fns';
-import { MOOD_COLOR_MAP, type MoodOption, type SearchResult } from '../types/database';
-import { isMorningComplete, isMorningStarted, isNightComplete, isNightStarted, truncate, extractSnippet } from '../lib/utils';
+import { MOOD_COLOR_MAP, MOOD_OPTIONS, type MoodOption, type SearchResult } from '../types/database';
+import { isMorningComplete, isNightComplete, truncate, extractSnippet } from '../lib/utils';
 import {
   ChevronLeft, ChevronRight, Search, Calendar, X,
-  Sun as SunIcon, Moon, StickyNote, Loader2,
+  Sun as SunIcon, Moon, Loader2, Flame, Sparkles, BookOpen,
 } from 'lucide-react';
 
 export const HistoryPage: React.FC = () => {
@@ -50,6 +50,15 @@ export const HistoryPage: React.FC = () => {
 
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
 
+  // Derived memory statistics
+  const monthEntries = Object.values(calendarData);
+  const totalEntriesLogged = monthEntries.length;
+  const fullDaysCompleted = monthEntries.filter(
+    (e: any) =>
+      (e.morning_completed || isMorningComplete(e, e.priorities || [], e.action_steps || [])) &&
+      (e.night_completed || isNightComplete(e, e.meals || [], e.wind_down_items || []))
+  ).length;
+
   // Search
   const handleSearch = async () => {
     if (!searchQuery.trim() || !user) return;
@@ -80,11 +89,61 @@ export const HistoryPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-extrabold text-text-primary dark:text-dark-text">
-        <Calendar size={24} className="inline mr-2 text-lavender" />
-        History
-      </h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-extrabold text-text-primary dark:text-dark-text">
+          <Calendar size={24} className="inline mr-2 text-lavender" />
+          History & Memory Archive
+        </h1>
+        <p className="text-sm text-text-secondary dark:text-dark-text-secondary mt-1">
+          Explore past journal reflections, daily wins, and cherished notes.
+        </p>
+      </div>
+
+      {/* Memory Stats & Highlights Banner */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="card p-3.5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+            <BookOpen size={20} />
+          </div>
+          <div>
+            <div className="text-lg font-black text-text-primary dark:text-dark-text leading-tight">
+              {totalEntriesLogged}
+            </div>
+            <div className="text-[11px] font-bold text-text-muted dark:text-dark-text-muted uppercase tracking-wider">
+              Entries Logged
+            </div>
+          </div>
+        </div>
+
+        <div className="card p-3.5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+            <Flame size={20} />
+          </div>
+          <div>
+            <div className="text-lg font-black text-text-primary dark:text-dark-text leading-tight">
+              {fullDaysCompleted}
+            </div>
+            <div className="text-[11px] font-bold text-text-muted dark:text-dark-text-muted uppercase tracking-wider">
+              Full Days Complete
+            </div>
+          </div>
+        </div>
+
+        <div className="col-span-2 md:col-span-1 card p-3.5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+            <Sparkles size={20} />
+          </div>
+          <div>
+            <div className="text-lg font-black text-text-primary dark:text-dark-text leading-tight">
+              {format(currentMonth, 'MMM yyyy')}
+            </div>
+            <div className="text-[11px] font-bold text-text-muted dark:text-dark-text-muted uppercase tracking-wider">
+              Current View
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Search */}
       <div className="card">
@@ -198,11 +257,9 @@ export const HistoryPage: React.FC = () => {
             const isFutureDate = dateStr > todayStr;
             const data = calendarData[dateStr];
             const todayClass = isToday(day) ? 'today' : '';
-            const moodColor = data?.morning_mood
-              ? MOOD_COLOR_MAP[data.morning_mood as MoodOption]
-              : data?.night_mood
-              ? MOOD_COLOR_MAP[data.night_mood as MoodOption]
-              : undefined;
+            const activeMoodKey = data?.morning_mood || data?.night_mood;
+            const moodEmoji = MOOD_OPTIONS.find((m) => m.value === activeMoodKey)?.emoji;
+            const moodColor = activeMoodKey ? MOOD_COLOR_MAP[activeMoodKey as MoodOption] : undefined;
 
             const snippet = data
               ? data.daily_note ||
@@ -224,36 +281,40 @@ export const HistoryPage: React.FC = () => {
             const isPartialDone = data
               ? isMorningDone ||
                 isNightDone ||
-                isMorningStarted(data, data.priorities || [], data.action_steps || []) ||
-                isNightStarted(data, data.meals || [], data.wind_down_items || []) ||
                 !!data.daily_note
               : false;
 
              return (
               <button
                 key={dateStr}
-                className={`cal-day min-h-[60px] p-1.5 flex flex-col items-start justify-between overflow-hidden transition-all ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : ''}`}
+                className={`cal-day min-h-[64px] p-2 flex flex-col items-start justify-between overflow-hidden tap-spring rounded-2xl border border-border/50 dark:border-dark-border/50 ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : 'hover:scale-[1.03] hover:shadow-md'}`}
                 onClick={() => !isFutureDate && navigateToDate(dateStr)}
                 disabled={isFutureDate}
                 title={isFutureDate ? 'Future date locked' : undefined}
-                style={moodColor ? { backgroundColor: `${moodColor}22` } : undefined}
+                style={moodColor ? { backgroundColor: `${moodColor}25` } : undefined}
               >
-                <div className="flex items-center gap-1.5 w-full">
-                  <span className="font-bold text-xs">{format(day, 'd')}</span>
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-black text-xs text-text-primary dark:text-dark-text">{format(day, 'd')}</span>
                   {isFutureDate ? (
                     <span className="text-[10px] opacity-60">🔒</span>
                   ) : isFullDone ? (
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100 dark:ring-emerald-900/30 block shrink-0" title="Fully Completed" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900/40 block shrink-0" title="Fully Completed" />
                   ) : isPartialDone ? (
-                    <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-100 dark:ring-amber-900/30 block shrink-0" title="Partially Completed" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-200 dark:ring-amber-900/40 block shrink-0" title="Partially Completed" />
                   ) : null}
                 </div>
 
-                {/* Text snippet preview */}
-                {snippet && !isFutureDate && (
-                  <span className="text-[9px] leading-tight font-medium text-text-secondary dark:text-dark-text-secondary truncate w-full text-center mt-auto opacity-90">
-                    {truncate(snippet, 10)}
-                  </span>
+                {/* Mood Emoji or Text snippet preview */}
+                {!isFutureDate && (
+                  <div className="w-full flex items-center justify-between mt-auto pt-1">
+                    {moodEmoji ? (
+                      <span className="text-base leading-none">{moodEmoji}</span>
+                    ) : snippet ? (
+                      <span className="text-[9px] leading-tight font-semibold text-text-muted dark:text-dark-text-muted truncate">
+                        {truncate(snippet, 8)}
+                      </span>
+                    ) : null}
+                  </div>
                 )}
               </button>
             );

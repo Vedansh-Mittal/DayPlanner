@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../stores/auth-store';
 import { queryInsights, SUGGESTED_QUESTIONS, type InsightResponse } from '../lib/insights-engine';
+import { AIThinkingCompanion } from '../components/AIThinkingCompanion';
 import { Sparkles, Send, Loader2, HeartHandshake } from 'lucide-react';
 
 /* Inline formatter for bold headers and styled quotes */
@@ -171,8 +172,15 @@ export const InsightsPage: React.FC = () => {
         </button>
       </div>
 
+      {/* AI Companion Thinking Loading State */}
+      {loading && (
+        <div className="card">
+          <AIThinkingCompanion />
+        </div>
+      )}
+
       {/* Result */}
-      {result && (
+      {!loading && result && (
         <div className="card fade-in">
           <div className="flex items-start gap-3.5">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-lavender to-blue-soft flex items-center justify-center flex-shrink-0 shadow-sm">
