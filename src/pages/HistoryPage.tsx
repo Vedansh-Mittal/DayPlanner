@@ -6,7 +6,7 @@ import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
   getDay, addMonths, subMonths, parse, isToday,
 } from 'date-fns';
-import { MOOD_COLOR_MAP, MOOD_OPTIONS, type MoodOption, type SearchResult } from '../types/database';
+import { MOOD_COLOR_MAP, MOOD_OPTIONS, type MoodOption, type SearchResult, type DailyEntryFull } from '../types/database';
 import { isMorningComplete, isNightComplete, truncate, extractSnippet } from '../lib/utils';
 import {
   ChevronLeft, ChevronRight, Search, Calendar, X,
@@ -17,7 +17,7 @@ export const HistoryPage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [calendarData, setCalendarData] = useState<Record<string, any>>({});
+  const [calendarData, setCalendarData] = useState<Record<string, Partial<DailyEntryFull>>>({});
   const [loadingCal, setLoadingCal] = useState(true);
 
   // Search
@@ -40,9 +40,11 @@ export const HistoryPage: React.FC = () => {
       .gte('entry_date', monthStart)
       .lte('entry_date', monthEnd);
 
-    const map: Record<string, any> = {};
-    (data || []).forEach((e: any) => {
-      map[e.entry_date] = e;
+    const map: Record<string, Partial<DailyEntryFull>> = {};
+    ((data as Partial<DailyEntryFull>[]) || []).forEach((e) => {
+      if (e.entry_date) {
+        map[e.entry_date] = e;
+      }
     });
 
     // Merge offline cache so instant edits on PlannerPage are immediately visible in History calendar!
