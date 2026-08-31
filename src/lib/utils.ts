@@ -217,7 +217,7 @@ export function extractSnippet(text: string, query: string, contextLen = 40): st
 }
 
 /** Strict 100% Morning completion check (every field required) */
-export function isMorningComplete(fields: any, priorities: any[] = [], actionSteps: any[] = []): boolean {
+export function isMorningComplete(fields: any, priorities: any = [], actionSteps: any = []): boolean {
   if (!fields?.morning_mood) return false;
   if (!fields?.morning_mood_intensity) return false;
   if (!Array.isArray(fields?.morning_motivations) || fields.morning_motivations.length === 0) return false;
@@ -226,33 +226,38 @@ export function isMorningComplete(fields: any, priorities: any[] = [], actionSte
   if (!fields?.morning_brain_dump?.trim()) return false;
   if (!fields?.morning_inspire?.trim()) return false;
 
-  // At least 1 priority required (not all 3)
-  if (!priorities.some((p: any) => p?.text && p.text.trim())) return false;
+  const priorityArr = Array.isArray(priorities) ? priorities : [];
+  const actionArr = Array.isArray(actionSteps) ? actionSteps : [];
 
-  // At least 1 action step required (not all 5)
-  if (!actionSteps.some((a: any) => a?.text && a.text.trim())) return false;
+  // At least 1 priority required
+  if (!priorityArr.some((p: any) => p?.text && p.text.trim())) return false;
+
+  // At least 1 action step required
+  if (!actionArr.some((a: any) => a?.text && a.text.trim())) return false;
 
   return true;
 }
 
 /** Check if Morning has been started */
-export function isMorningStarted(fields: any, priorities: any[] = [], actionSteps: any[] = []): boolean {
+export function isMorningStarted(fields: any, priorities: any = [], actionSteps: any = []): boolean {
+  const priorityArr = Array.isArray(priorities) ? priorities : [];
+  const actionArr = Array.isArray(actionSteps) ? actionSteps : [];
+
   return !!(
     fields?.morning_mood ||
     fields?.morning_why?.trim() ||
     fields?.morning_brain_dump?.trim() ||
     fields?.morning_inspire?.trim() ||
     (Array.isArray(fields?.morning_motivations) && fields.morning_motivations.length > 0) ||
-    priorities.some((p: any) => p?.text && p.text.trim().length > 0) ||
-    actionSteps.some((a: any) => a?.text && a.text.trim().length > 0)
+    priorityArr.some((p: any) => p?.text && p.text.trim().length > 0) ||
+    actionArr.some((a: any) => a?.text && a.text.trim().length > 0)
   );
 }
 
 /** Strict 100% Night completion check (every field required except medications) */
-export function isNightComplete(fields: any, meals: any[] = [], windDownItems: any[] = []): boolean {
+export function isNightComplete(fields: any, meals: any = [], windDownItems: any = []): boolean {
   if (!fields?.night_mood) return false;
   if (!fields?.night_mood_intensity) return false;
-  // At least 1 gratitude entry required (not all 3)
   if (!fields?.night_gratitude_1?.trim() && !fields?.night_gratitude_2?.trim() && !fields?.night_gratitude_3?.trim()) return false;
   if (!fields?.night_win?.trim()) return false;
   if (!fields?.night_went_well?.trim()) return false;
@@ -261,24 +266,28 @@ export function isNightComplete(fields: any, meals: any[] = [], windDownItems: a
   if (!fields?.night_intention?.trim()) return false;
   if ((fields?.water_count || 0) <= 0) return false;
 
-  // All 4 meals required AND must be answered (either Ate with valid time, or Skipped)
+  const mealArr = Array.isArray(meals) ? meals : [];
+  const windDownArr = Array.isArray(windDownItems) ? windDownItems : [];
+
   const mealTypes = ['breakfast', 'lunch', 'dinner', 'snacks'];
   for (const mt of mealTypes) {
-    const meal = meals.find((m: any) => m.meal_type === mt);
+    const meal = mealArr.find((m: any) => m.meal_type === mt);
     if (!meal) return false;
     const isEaten = meal.ate === true && meal.time && meal.time !== 'skipped' && meal.time.trim().length > 0;
     const isSkipped = meal.time === 'skipped' || (meal.ate === false && meal.time === 'skipped');
     if (!isEaten && !isSkipped) return false;
   }
 
-  // Wind-down items: at least 1 completed
-  if (!windDownItems.some((w: any) => w.completed)) return false;
+  if (!windDownArr.some((w: any) => w.completed)) return false;
 
   return true;
 }
 
 /** Check if Night has been started */
-export function isNightStarted(fields: any, meals: any[] = [], windDownItems: any[] = []): boolean {
+export function isNightStarted(fields: any, meals: any = [], windDownItems: any = []): boolean {
+  const mealArr = Array.isArray(meals) ? meals : [];
+  const windDownArr = Array.isArray(windDownItems) ? windDownItems : [];
+
   return !!(
     fields?.night_mood ||
     fields?.night_gratitude_1?.trim() ||
@@ -289,8 +298,8 @@ export function isNightStarted(fields: any, meals: any[] = [], windDownItems: an
     fields?.night_improve?.trim() ||
     fields?.night_brain_dump?.trim() ||
     fields?.night_intention?.trim() ||
-    meals.some((m: any) => m.ate || m.time || m.notes) ||
-    windDownItems.some((w: any) => w.completed) ||
+    mealArr.some((m: any) => m.ate || m.time || m.notes) ||
+    windDownArr.some((w: any) => w.completed) ||
     (fields?.water_count || 0) > 0
   );
 }
