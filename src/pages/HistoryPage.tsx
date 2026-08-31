@@ -226,14 +226,25 @@ export const HistoryPage: React.FC = () => {
                       <span className="font-bold text-sm">
                         {format(parse(r.entry_date, 'yyyy-MM-dd', new Date()), 'EEEE, MMM d')}
                       </span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         {r.morning_mood && (
-                          <span className="text-xs px-2 py-0.5 rounded-full" style={{
-                            backgroundColor: MOOD_COLOR_MAP[r.morning_mood as MoodOption] || 'var(--color-cream-dark)',
-                          }}>☀️ {r.morning_mood}</span>
+                          <span
+                            className="text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1 bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+                            style={MOOD_COLOR_MAP[r.morning_mood as MoodOption] ? { backgroundColor: `${MOOD_COLOR_MAP[r.morning_mood as MoodOption]}40` } : undefined}
+                          >
+                            ☀️ {r.morning_mood}
+                          </span>
                         )}
-                        {r.morning_completed && <SunIcon size={14} className="text-lavender" />}
-                        {r.night_completed && <Moon size={14} className="text-blue-soft" />}
+                        {r.night_mood ? (
+                          <span
+                            className="text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200"
+                            style={MOOD_COLOR_MAP[r.night_mood as MoodOption] ? { backgroundColor: `${MOOD_COLOR_MAP[r.night_mood as MoodOption]}40` } : undefined}
+                          >
+                            🌙 {r.night_mood}
+                          </span>
+                        ) : (
+                          <Moon size={15} className="text-text-muted opacity-60 ml-0.5" />
+                        )}
                       </div>
                     </div>
                     <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
@@ -283,18 +294,7 @@ export const HistoryPage: React.FC = () => {
             const data = calendarData[dateStr];
             const todayClass = isToday(day) ? 'today' : '';
             const activeMoodKey = data?.morning_mood || data?.night_mood;
-            const moodEmoji = MOOD_OPTIONS.find((m) => m.value === activeMoodKey)?.emoji;
             const moodColor = activeMoodKey ? MOOD_COLOR_MAP[activeMoodKey as MoodOption] : undefined;
-
-            const snippet = data
-              ? data.daily_note ||
-                data.morning_why ||
-                data.night_win ||
-                data.morning_brain_dump ||
-                (data.priorities && data.priorities[0]?.text) ||
-                data.night_gratitude_1 ||
-                ''
-              : '';
 
             const isMorningDone = data
               ? data.morning_completed || isMorningComplete(data, data.priorities || [], data.action_steps || [])
@@ -304,22 +304,26 @@ export const HistoryPage: React.FC = () => {
               : false;
             const isFullDone = isMorningDone && isNightDone;
             const isPartialDone = data
-              ? isMorningDone ||
-                isNightDone ||
-                !!data.daily_note
+              ? !isFullDone && (
+                  isMorningDone ||
+                  isNightDone ||
+                  !!data.daily_note?.trim() ||
+                  (typeof data.water_count === 'number' && data.water_count > 0)
+                )
               : false;
 
              return (
               <button
                 key={dateStr}
-                className={`cal-day min-h-[64px] p-2 flex flex-col items-start justify-between overflow-hidden tap-spring rounded-2xl border border-border/50 dark:border-dark-border/50 ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : 'hover:scale-[1.03] hover:shadow-md'}`}
+                className={`cal-day min-h-[60px] p-2 flex flex-col justify-between overflow-hidden tap-spring rounded-2xl border border-border/50 dark:border-dark-border/50 ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : 'hover:scale-[1.03] hover:shadow-md'}`}
                 onClick={() => !isFutureDate && navigateToDate(dateStr)}
                 disabled={isFutureDate}
                 title={isFutureDate ? 'Future date locked' : undefined}
                 style={moodColor ? { backgroundColor: `${moodColor}25` } : undefined}
               >
+                {/* Header row: Day Number + Completion Dot (Green / Yellow / Lock) */}
                 <div className="flex items-center justify-between w-full">
-                  <span className="font-black text-xs text-text-primary dark:text-dark-text">{format(day, 'd')}</span>
+                  <span className="font-bold text-xs text-text-primary dark:text-dark-text">{format(day, 'd')}</span>
                   {isFutureDate ? (
                     <span className="text-[10px] opacity-60">🔒</span>
                   ) : isFullDone ? (
@@ -329,16 +333,12 @@ export const HistoryPage: React.FC = () => {
                   ) : null}
                 </div>
 
-                {/* Mood Emoji or Text snippet preview */}
-                {!isFutureDate && (
-                  <div className="w-full flex items-center justify-between mt-auto pt-1">
-                    {moodEmoji ? (
-                      <span className="text-base leading-none">{moodEmoji}</span>
-                    ) : snippet ? (
-                      <span className="text-[9px] leading-tight font-semibold text-text-muted dark:text-dark-text-muted truncate">
-                        {truncate(snippet, 8)}
-                      </span>
-                    ) : null}
+                {/* Daily Note snippet preview ONLY (no mood emojis) */}
+                {!isFutureDate && data?.daily_note?.trim() && (
+                  <div className="w-full mt-auto pt-1">
+                    <span className="text-[9px] font-medium text-text-secondary dark:text-dark-text-secondary leading-tight truncate block text-left" title={data.daily_note.trim()}>
+                      {truncate(data.daily_note.trim(), 10)}
+                    </span>
                   </div>
                 )}
               </button>
