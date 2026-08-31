@@ -194,11 +194,11 @@ export const SettingsPage: React.FC = () => {
               <h1>Daylight Planner</h1>
               <div class="subtitle">Personal Journal Digest • Generated on ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
               ${entries.map(e => {
-                const datePretty = new Date(e.entry_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                const morningStatusBadge = e.morning_completed ? '<span class="badge badge-completed">Complete</span>' : '<span class="badge badge-pending">In Progress</span>';
-                const nightStatusBadge = e.night_completed ? '<span class="badge badge-completed">Complete</span>' : '<span class="badge badge-pending">In Progress</span>';
+          const datePretty = new Date(e.entry_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+          const morningStatusBadge = e.morning_completed ? '<span class="badge badge-completed">Complete</span>' : '<span class="badge badge-pending">In Progress</span>';
+          const nightStatusBadge = e.night_completed ? '<span class="badge badge-completed">Complete</span>' : '<span class="badge badge-pending">In Progress</span>';
 
-                return `
+          return `
                   <div class="entry">
                     <div class="date">${datePretty}</div>
                     <div class="grid">
@@ -246,7 +246,7 @@ export const SettingsPage: React.FC = () => {
                     </div>
                   </div>
                 `;
-              }).join('')}
+        }).join('')}
               <script>
                 window.onload = function() {
                   window.print();
@@ -522,11 +522,10 @@ export const SettingsPage: React.FC = () => {
           ]).map((t) => (
             <button
               key={t.value}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all ${
-                themePref === t.value
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all ${themePref === t.value
                   ? 'border-lavender bg-lavender-light dark:bg-lavender-dark/20 text-lavender-dark dark:text-lavender'
                   : 'border-border dark:border-dark-border text-text-secondary dark:text-dark-text-secondary hover:border-lavender/50'
-              }`}
+                }`}
               onClick={() => handleThemeChange(t.value)}
             >
               <t.icon size={16} />
@@ -570,7 +569,7 @@ export const SettingsPage: React.FC = () => {
           Backup & Export Data
         </h2>
         <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
-          Your Daylight Planner database is safe! Supabase operates on robust storage with automatic daily backups. 
+          Your Daylight Planner database is safe! Supabase operates on robust storage with automatic daily backups.
           Additionally, you can download copy backups of your data below to keep them locally, or restore a backup.
         </p>
 
@@ -626,6 +625,7 @@ export const SettingsPage: React.FC = () => {
         <p className="text-sm text-text-secondary dark:text-dark-text-secondary mb-3">
           This will permanently delete all your planner entries, settings, and data.
           Your authentication account will remain, but all planner data will be gone forever.
+          A JSON file will be downloaded automatically before deletion, so in case you want to restore this progress again in future.
         </p>
 
         {!showDeleteConfirm ? (
