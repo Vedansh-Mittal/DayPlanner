@@ -229,30 +229,29 @@ export const HistoryPage: React.FC = () => {
                 !!data.daily_note
               : false;
 
-            return (
+             return (
               <button
                 key={dateStr}
-                className={`cal-day min-h-[64px] p-1 flex flex-col items-center justify-between overflow-hidden transition-all ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : ''}`}
+                className={`cal-day min-h-[60px] p-1.5 flex flex-col items-start justify-between overflow-hidden transition-all relative ${todayClass} ${isFutureDate ? 'opacity-30 cursor-not-allowed' : ''}`}
                 onClick={() => !isFutureDate && navigateToDate(dateStr)}
                 disabled={isFutureDate}
                 title={isFutureDate ? 'Future date locked' : undefined}
                 style={moodColor ? { backgroundColor: `${moodColor}22` } : undefined}
               >
-                <div className="flex items-center justify-between w-full px-1">
-                  <span className="font-bold text-xs">{format(day, 'd')}</span>
-                  {isFutureDate ? (
-                    <span className="text-[10px] opacity-60">🔒</span>
-                  ) : isFullDone ? (
-                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900/40" title="Fully Completed" />
-                  ) : isPartialDone ? (
-                    <div className="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-200 dark:ring-amber-900/40" title="Partially Completed" />
-                  ) : null}
-                </div>
+                <span className="font-bold text-xs">{format(day, 'd')}</span>
+                
+                {isFutureDate ? (
+                  <span className="absolute top-1 right-1 text-[10px] opacity-60">🔒</span>
+                ) : isFullDone ? (
+                  <div className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100 dark:ring-emerald-900/30" title="Fully Completed" />
+                ) : isPartialDone ? (
+                  <div className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-100 dark:ring-amber-900/30" title="Partially Completed" />
+                ) : null}
 
                 {/* Text snippet preview */}
                 {snippet && !isFutureDate && (
-                  <span className="text-[10px] leading-tight font-medium text-text-secondary dark:text-dark-text-secondary truncate w-full text-center px-0.5 opacity-90">
-                    {truncate(snippet, 12)}
+                  <span className="text-[9px] leading-tight font-medium text-text-secondary dark:text-dark-text-secondary truncate w-full text-center mt-auto opacity-90">
+                    {truncate(snippet, 10)}
                   </span>
                 )}
               </button>

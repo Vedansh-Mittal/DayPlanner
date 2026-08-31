@@ -110,8 +110,8 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
 
         {medications.length > 0 && (
           <div className="space-y-3 mb-3">
-            {/* Header */}
-            <div className="grid grid-cols-[1fr_80px_80px_48px_32px] gap-2 text-xs font-bold text-text-muted dark:text-dark-text-muted px-1">
+            {/* Header - Desktop only */}
+            <div className="hidden md:grid md:grid-cols-[1fr_80px_80px_48px_32px] gap-2 text-xs font-bold text-text-muted dark:text-dark-text-muted px-1">
               <span>Medication</span>
               <span>Dose</span>
               <span>Time</span>
@@ -119,46 +119,66 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
               <span></span>
             </div>
             {medications.map((med) => (
-              <div key={med.id} className="grid grid-cols-[1fr_80px_80px_48px_32px] gap-2 items-center">
-                <input
-                  type="text"
-                  className="input-field text-sm py-1.5"
-                  placeholder="Name"
-                  value={med.name || ''}
-                  onChange={(e) => updateMedication(med.id, 'name', e.target.value)}
-                  onBlur={flushSave}
-                />
-                <input
-                  type="text"
-                  className="input-field text-sm py-1.5"
-                  placeholder="Dose"
-                  value={med.dose || ''}
-                  onChange={(e) => updateMedication(med.id, 'dose', e.target.value)}
-                  onBlur={flushSave}
-                />
-                <input
-                  type="time"
-                  className="input-field text-sm py-1.5"
-                  value={med.time || ''}
-                  onChange={(e) => updateMedication(med.id, 'time', e.target.value)}
-                  onBlur={flushSave}
-                />
-                <div className="flex justify-center">
+              <div 
+                key={med.id} 
+                className="flex flex-col md:grid md:grid-cols-[1fr_80px_80px_48px_32px] gap-2 p-3 md:p-0 bg-cream/30 dark:bg-dark-bg/20 md:bg-transparent dark:md:bg-transparent rounded-xl md:rounded-none border border-border/40 dark:border-dark-border/40 md:border-0 items-stretch md:items-center"
+              >
+                {/* Mobile top row: Checkbox + Name + Trash */}
+                <div className="flex items-center gap-2 w-full md:contents">
                   <input
                     type="checkbox"
-                    className="checkbox-custom"
+                    className="checkbox-custom shrink-0"
                     checked={med.taken}
                     onChange={(e) => updateMedication(med.id, 'taken', e.target.checked)}
                   />
+                  <input
+                    type="text"
+                    className="input-field text-sm py-1.5 flex-1 md:w-auto"
+                    placeholder="Name"
+                    value={med.name || ''}
+                    onChange={(e) => updateMedication(med.id, 'name', e.target.value)}
+                    onBlur={flushSave}
+                  />
+                  <button
+                    type="button"
+                    className="text-text-muted hover:text-red-400 transition-colors p-1.5 md:hidden"
+                    onClick={() => removeMedication(med.id)}
+                    aria-label="Remove medication"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="text-text-muted hover:text-red-400 transition-colors"
-                  onClick={() => removeMedication(med.id)}
-                  aria-label="Remove medication"
-                >
-                  <Trash2 size={16} />
-                </button>
+
+                {/* Mobile bottom row: Dose + Time + Desktop Trash */}
+                <div className="flex flex-row md:contents gap-2 mt-1 md:mt-0 items-center">
+                  <input
+                    type="text"
+                    className="input-field text-xs py-1.5 md:text-sm flex-1 md:w-auto"
+                    placeholder="Dose"
+                    value={med.dose || ''}
+                    onChange={(e) => updateMedication(med.id, 'dose', e.target.value)}
+                    onBlur={flushSave}
+                  />
+                  <input
+                    type="time"
+                    className="input-field text-xs py-1 px-1.5 md:text-sm md:py-1.5 w-[90px] md:w-auto shrink-0"
+                    value={med.time || ''}
+                    onChange={(e) => updateMedication(med.id, 'time', e.target.value)}
+                    onBlur={flushSave}
+                  />
+                  {/* Desktop Taken Checkbox placeholder (for grid column alignment on desktop) */}
+                  <div className="hidden md:flex justify-center">
+                    {/* Handled by top row on mobile */}
+                  </div>
+                  <button
+                    type="button"
+                    className="hidden md:block text-text-muted hover:text-red-400 transition-colors"
+                    onClick={() => removeMedication(med.id)}
+                    aria-label="Remove medication"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -202,7 +222,8 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
 
         {/* Meals */}
         <div className="space-y-3 mb-6">
-          <div className="grid grid-cols-[auto_100px_160px_110px_1fr] gap-2 text-xs font-bold text-text-muted dark:text-dark-text-muted px-1 items-center">
+          {/* Header - Desktop only */}
+          <div className="hidden md:grid md:grid-cols-[auto_100px_160px_110px_1fr] gap-2 text-xs font-bold text-text-muted dark:text-dark-text-muted px-1 items-center">
             <span></span>
             <span>Meal</span>
             <span>Ate?</span>
@@ -215,79 +236,92 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
             const isSkipped = meal?.time === 'skipped';
 
             return (
-              <div key={mt.value} className="grid grid-cols-[auto_100px_160px_110px_1fr] gap-2 items-center">
-                <span className="text-lg">{mt.emoji}</span>
-                <span className="text-sm font-semibold">{mt.label}</span>
-                
-                {/* 2-Button Toggle: ✓ Ate / ✗ Skipped */}
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    title="Ate meal"
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 border ${
-                      isEaten
-                        ? 'bg-mint text-emerald-950 border-mint font-bold shadow-sm'
-                        : 'bg-surface dark:bg-dark-surface border-border dark:border-dark-border text-text-muted hover:text-text-primary'
-                    }`}
-                    onClick={() => {
-                      const prevTime = meal?.time && meal.time !== 'skipped' ? meal.time : '12:00';
-                      updateMeal(mt.value, 'ate', true);
-                      updateMeal(mt.value, 'time', prevTime);
-                    }}
-                  >
-                    ✓ Ate
-                  </button>
+              <div 
+                key={mt.value} 
+                className="flex flex-col md:grid md:grid-cols-[auto_100px_160px_110px_1fr] gap-2 p-3 md:p-0 bg-cream/30 dark:bg-dark-bg/20 md:bg-transparent dark:md:bg-transparent rounded-xl md:rounded-none border border-border/40 dark:border-dark-border/40 md:border-0 items-stretch md:items-center"
+              >
+                {/* Mobile top row: Emoji + Label + Toggles */}
+                <div className="flex items-center justify-between w-full md:contents">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{mt.emoji}</span>
+                    <span className="text-sm font-semibold">{mt.label}</span>
+                  </div>
+                  
+                  {/* Eat/Skip Toggle Buttons (visible on right side of header on mobile, inline on desktop) */}
+                  <div className="flex gap-1.5 md:contents">
+                    <button
+                      type="button"
+                      title="Ate meal"
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 border ${
+                        isEaten
+                          ? 'bg-mint text-emerald-950 border-mint font-bold shadow-sm'
+                          : 'bg-surface dark:bg-dark-surface border-border dark:border-dark-border text-text-muted hover:text-text-primary'
+                      }`}
+                      onClick={() => {
+                        const prevTime = meal?.time && meal.time !== 'skipped' ? meal.time : '12:00';
+                        updateMeal(mt.value, 'ate', true);
+                        updateMeal(mt.value, 'time', prevTime);
+                      }}
+                    >
+                      ✓ Ate
+                    </button>
 
-                  <button
-                    type="button"
-                    title="Skipped meal"
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 border ${
-                      isSkipped
-                        ? 'bg-rose-500 text-white border-rose-500 font-bold shadow-sm'
-                        : 'bg-surface dark:bg-dark-surface border-border dark:border-dark-border text-text-muted hover:text-text-primary'
-                    }`}
-                    onClick={() => {
-                      updateMeal(mt.value, 'ate', false);
-                      updateMeal(mt.value, 'time', 'skipped');
-                    }}
-                  >
-                    ✗ Skipped
-                  </button>
+                    <button
+                      type="button"
+                      title="Skipped meal"
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 border ${
+                        isSkipped
+                          ? 'bg-rose-500 text-white border-rose-500 font-bold shadow-sm'
+                          : 'bg-surface dark:bg-dark-surface border-border dark:border-dark-border text-text-muted hover:text-text-primary'
+                      }`}
+                      onClick={() => {
+                        updateMeal(mt.value, 'ate', false);
+                        updateMeal(mt.value, 'time', 'skipped');
+                      }}
+                    >
+                      ✗ Skipped
+                    </button>
+                  </div>
                 </div>
 
-                {/* Time picker */}
-                {isSkipped ? (
-                  <span className="text-xs font-medium text-text-muted italic px-2 py-1 bg-cream-dark dark:bg-dark-surface-raised rounded-lg text-center">
-                    Skipped
-                  </span>
-                ) : (
+                {/* Time & Notes Fields: inline on desktop, side-by-side row below header on mobile */}
+                <div className="flex flex-row md:contents gap-2 mt-1 md:mt-0 items-center">
+                  {/* Time picker */}
+                  <div className="w-[100px] md:w-auto shrink-0">
+                    {isSkipped ? (
+                      <span className="block text-xs font-medium text-text-muted italic px-2 py-1 bg-cream-dark dark:bg-dark-surface-raised rounded-lg text-center border border-border/30 dark:border-dark-border/30">
+                        Skipped
+                      </span>
+                    ) : (
+                      <input
+                        type="time"
+                        className="input-field text-xs py-1.5 md:text-sm w-full"
+                        value={meal?.time && meal.time !== 'skipped' ? meal.time : ''}
+                        onChange={(e) => {
+                          const tVal = e.target.value;
+                          if (tVal) {
+                            updateMeal(mt.value, 'ate', true);
+                            updateMeal(mt.value, 'time', tVal);
+                          } else {
+                            updateMeal(mt.value, 'ate', false);
+                            updateMeal(mt.value, 'time', '');
+                          }
+                        }}
+                        onBlur={flushSave}
+                      />
+                    )}
+                  </div>
+
+                  {/* Notes */}
                   <input
-                    type="time"
-                    className="input-field text-sm py-1.5"
-                    value={meal?.time && meal.time !== 'skipped' ? meal.time : ''}
-                    onChange={(e) => {
-                      const tVal = e.target.value;
-                      if (tVal) {
-                        updateMeal(mt.value, 'ate', true);
-                        updateMeal(mt.value, 'time', tVal);
-                      } else {
-                        updateMeal(mt.value, 'ate', false);
-                        updateMeal(mt.value, 'time', '');
-                      }
-                    }}
+                    type="text"
+                    className="input-field text-xs py-1.5 md:text-sm flex-1 md:w-auto"
+                    placeholder="Notes"
+                    value={meal?.notes || ''}
+                    onChange={(e) => updateMeal(mt.value, 'notes', e.target.value)}
                     onBlur={flushSave}
                   />
-                )}
-
-                {/* Notes */}
-                <input
-                  type="text"
-                  className="input-field text-sm py-1.5"
-                  placeholder="Notes"
-                  value={meal?.notes || ''}
-                  onChange={(e) => updateMeal(mt.value, 'notes', e.target.value)}
-                  onBlur={flushSave}
-                />
+                </div>
               </div>
             );
           })}
