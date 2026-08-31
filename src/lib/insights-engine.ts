@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
-import type { DailyEntry, MoodOption, MOOD_OPTIONS } from '../types/database';
+import type { DailyEntry, MoodOption } from '../types/database';
 
 /* ===== Types ===== */
 
@@ -11,7 +11,33 @@ export interface InsightResponse {
   insufficientData: boolean;
 }
 
-const MIN_ENTRIES = 1;
+export const SYSTEM_PROMPT = `You are the private insights assistant inside Daylight Planner, a personal daily journaling app. You are answering ONE specific question from the person who wrote every entry you're about to read. Nobody else will ever see this data.
+
+You will be given:
+- A date range describing which of their entries are included below.
+- Pre-computed statistics (averages, counts, distributions) for that range — these numbers are already correct; use them as-is, never recompute or guess a number that isn't given to you.
+- Raw entry text: daily notes, brain dumps, priorities, gratitude, wins, meals, habits, and reflections, each labeled with its date.
+- Their question.
+
+Rules, in priority order:
+
+1. DRAW DEEP CONCLUSIONS & CONNECT THE DOTS:
+   - Do NOT simply list, regurgitate, or quote raw entries back to the user. The user can already view raw text in their calendar.
+   - Synthesize patterns across dimensions: connect their morning intentions, what they ate, hydration, priorities, brain dumps, and evening reflections to their mood and energy.
+   - For questions like "What makes my mood happy?", analyze what was happening on their highest-mood days (e.g. learning, consistent meals, achieving a priority, social moments, time outdoors) vs lower-mood days.
+   - For questions about gratitude or brain dumps, analyze their psychological themes, focus areas, cognitive shifts from morning to night, and recurring thoughts.
+
+2. GROUND EVERYTHING IN THE PROVIDED DATA: Never invent a date, quote, number, or pattern that isn't actually present in what you were given. If you're not sure something is supported by the data, don't say it.
+
+3. IF THE DATA CAN'T ANSWER THE QUESTION, SAY SO PLAINLY: If they ask about a time period or field they haven't logged yet, state what data is available. Do not force an answer from thin data.
+
+4. NEVER CLAIM CAUSATION: Use observational language ("On days when you logged X, your mood tended to be Y", "Your highest energy days coincided with Z").
+
+5. NO MEDICAL OR DIAGNOSTIC LANGUAGE: Never use clinical diagnostic labels.
+
+6. BE CONCISE & DIRECT: Aim for 120–220 words. Answer the core question in the first 1–2 sentences, then support with 2–3 synthesized observations referencing specific dates and habits.
+
+7. WRITE WARMLY & DIRECTLY: Talk like a thoughtful, empathetic companion who has read their journal, not like an automated data pipeline.`;
 
 /* ===== Main query handler ===== */
 
@@ -19,32 +45,9 @@ export async function queryInsights(
   userId: string,
   question: string,
 ): Promise<InsightResponse> {
-  // 1. First, attempt to invoke the AI Insights Edge Function
-  try {
-    const { data, error } = await supabase.functions.invoke('query-insights', {
-      body: { question },
-    });
-
-    if (!error && data && data.summary) {
-      return {
-        dateRange: data.dateRange || { start: '', end: '' },
-        summary: data.summary,
-        stats: data.stats || {},
-        insufficientData: !!data.insufficientData,
-      };
-    }
-    if (error) {
-      console.warn('Edge function returned error, falling back to local analysis:', error);
-    }
-  } catch (err) {
-    console.warn('Failed to reach AI insights function, using local engine:', err);
-  }
-
-  // 2. Fallback to deterministic local engine
-  // Determine date range from question
   const range = parseDateRange(question);
 
-  // Fetch entries in range
+  // Fetch entries in range with all relations
   const { data, error } = await supabase
     .from('daily_entries')
     .select('*, priorities(*), action_steps(*), meals(*), wind_down_items(*)')
@@ -56,7 +59,7 @@ export async function queryInsights(
   if (error) {
     return {
       dateRange: range,
-      summary: 'Sorry, I had trouble fetching your data. Please try again.',
+      summary: 'Sorry, I had trouble fetching your journal data. Please try again.',
       stats: {},
       insufficientData: true,
     };
@@ -67,59 +70,404 @@ export async function queryInsights(
   if (entries.length === 0) {
     return {
       dateRange: range,
-      summary: `I couldn't find any planner entries for ${range.start === range.end ? range.start : `the range ${range.start} to ${range.end}`}. Try checking another date or logging your entry!`,
+      summary: `I couldn't find any planner entries for the period ${range.start === range.end ? range.start : `${range.start} to ${range.end}`}. Try logging your day or picking another time range!`,
       stats: { entryCount: 0 },
       insufficientData: true,
     };
   }
 
-  // Route to specific analysis
+  // Pre-calculate stats
+  const stats = calculateStats(entries);
+
+  // 1. Try Gemini AI directly if client-side API key exists
+  const clientKey = (import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('daylight_gemini_key') || '').trim();
+  if (clientKey) {
+    try {
+      const aiSummary = await callGeminiDirect(clientKey, question, range, entries, stats);
+      if (aiSummary) {
+        return {
+          dateRange: range,
+          summary: aiSummary,
+          stats,
+          insufficientData: false,
+        };
+      }
+    } catch (err) {
+      console.warn('Client Gemini call failed, trying Edge Function:', err);
+    }
+  }
+
+  // 2. Try Supabase Edge Function
+  try {
+    const { data: edgeData, error: edgeErr } = await supabase.functions.invoke('query-insights', {
+      body: { question, startDate: range.start, endDate: range.end },
+    });
+
+    if (!edgeErr && edgeData && edgeData.summary && !edgeData.summary.includes('⚠️ Gemini API Key')) {
+      return {
+        dateRange: edgeData.dateRange || range,
+        summary: edgeData.summary,
+        stats: edgeData.stats || stats,
+        insufficientData: !!edgeData.insufficientData,
+      };
+    }
+  } catch (err) {
+    console.warn('Edge function invoke skipped, running deep local analysis engine:', err);
+  }
+
+  // 3. Fallback: Deep Analytical Local Synthesis Engine (no raw lists!)
+  return analyzeLocally(question, entries, range, stats);
+}
+
+/* ===== Direct Gemini Caller ===== */
+
+async function callGeminiDirect(
+  apiKey: string,
+  question: string,
+  range: { start: string; end: string },
+  entries: any[],
+  stats: any,
+): Promise<string | null> {
+  const formattedEntries = entries.map((e) => {
+    const parts: string[] = [];
+    parts.push(`--- DATE: ${e.entry_date} ---`);
+    if (e.daily_note) parts.push(`Daily Note: ${e.daily_note}`);
+    if (e.morning_mood) parts.push(`Morning Mood: ${e.morning_mood} (Intensity: ${e.morning_mood_intensity || 'N/A'})`);
+    if (Array.isArray(e.morning_motivations) && e.morning_motivations.length) {
+      parts.push(`Morning Motivations: ${e.morning_motivations.join(', ')}`);
+    }
+    if (e.morning_why) parts.push(`Morning WHY: ${e.morning_why}`);
+    if (e.morning_brain_dump) parts.push(`Morning Brain Dump: ${e.morning_brain_dump}`);
+    if (e.morning_inspire) parts.push(`Morning Inspiration: ${e.morning_inspire}`);
+    if (Array.isArray(e.priorities) && e.priorities.length) {
+      const pList = e.priorities.filter((p: any) => p.text?.trim()).map((p: any) => `${p.text} [${p.completed ? 'Done' : 'Not done'}]`);
+      if (pList.length) parts.push(`Top Priorities: ${pList.join('; ')}`);
+    }
+    if (Array.isArray(e.action_steps) && e.action_steps.length) {
+      const aList = e.action_steps.filter((a: any) => a.text?.trim()).map((a: any) => `${a.text} [${a.completed ? 'Done' : 'Not done'}]`);
+      if (aList.length) parts.push(`Plan of Action: ${aList.join('; ')}`);
+    }
+    if (e.water_count != null) parts.push(`Water: ${e.water_count} glasses`);
+    if (Array.isArray(e.meals) && e.meals.length) {
+      const mList = e.meals.map((m: any) => `${m.meal_type}: ${m.ate ? (m.time ? `Ate at ${m.time}` : 'Ate') : 'Skipped'}${m.notes ? ` (${m.notes})` : ''}`);
+      parts.push(`Meals: ${mList.join('; ')}`);
+    }
+    if (e.night_mood) parts.push(`Night Mood: ${e.night_mood} (Intensity: ${e.night_mood_intensity || 'N/A'})`);
+    const gratitudes = [e.night_gratitude_1, e.night_gratitude_2, e.night_gratitude_3].filter(Boolean);
+    if (gratitudes.length) parts.push(`Grateful For: ${gratitudes.join('; ')}`);
+    if (e.night_win) parts.push(`Win of the Day: ${e.night_win}`);
+    if (e.night_went_well) parts.push(`What Went Well: ${e.night_went_well}`);
+    if (e.night_improve) parts.push(`What to Improve: ${e.night_improve}`);
+    if (e.night_brain_dump) parts.push(`Night Brain Dump: ${e.night_brain_dump}`);
+    if (e.night_intention) parts.push(`Tomorrow's Intention: ${e.night_intention}`);
+    return parts.join('\n');
+  }).join('\n\n');
+
+  const userPrompt = `DATE RANGE: ${range.start} to ${range.end} (${entries.length} entries)
+
+STATISTICS:
+${JSON.stringify(stats, null, 2)}
+
+ENTRIES:
+${formattedEntries}
+
+QUESTION: ${question}`;
+
+  const payload = {
+    systemInstruction: {
+      parts: [{ text: SYSTEM_PROMPT }],
+    },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 600 },
+  };
+
+  const endpoints = [
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const text = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (text) return text;
+      }
+    } catch {
+      // try next
+    }
+  }
+
+  return null;
+}
+
+/* ===== Statistics Calculator ===== */
+
+function calculateStats(entries: any[]) {
+  const moodScores: Record<string, number> = {
+    amazing: 5, good: 4, okay: 3, tired: 2, anxious: 2,
+    overwhelmed: 1, sad: 1, irritable: 1, meh: 2,
+  };
+
+  let totalWater = 0;
+  let waterLoggedDays = 0;
+  const morningMoodDist: Record<string, number> = {};
+  const nightMoodDist: Record<string, number> = {};
+  let totalMorningScore = 0;
+  let morningCount = 0;
+  let totalNightScore = 0;
+  let nightCount = 0;
+
+  let totalPriorities = 0;
+  let completedPriorities = 0;
+  let totalActionSteps = 0;
+  let completedActionSteps = 0;
+
+  for (const e of entries) {
+    if (e.water_count != null) {
+      totalWater += e.water_count;
+      waterLoggedDays++;
+    }
+    if (e.morning_mood) {
+      morningMoodDist[e.morning_mood] = (morningMoodDist[e.morning_mood] || 0) + 1;
+      if (moodScores[e.morning_mood]) {
+        totalMorningScore += moodScores[e.morning_mood];
+        morningCount++;
+      }
+    }
+    if (e.night_mood) {
+      nightMoodDist[e.night_mood] = (nightMoodDist[e.night_mood] || 0) + 1;
+      if (moodScores[e.night_mood]) {
+        totalNightScore += moodScores[e.night_mood];
+        nightCount++;
+      }
+    }
+    if (Array.isArray(e.priorities)) {
+      for (const p of e.priorities) {
+        if (p.text && p.text.trim()) {
+          totalPriorities++;
+          if (p.completed) completedPriorities++;
+        }
+      }
+    }
+    if (Array.isArray(e.action_steps)) {
+      for (const a of e.action_steps) {
+        if (a.text && a.text.trim()) {
+          totalActionSteps++;
+          if (a.completed) completedActionSteps++;
+        }
+      }
+    }
+  }
+
+  return {
+    entryCount: entries.length,
+    avgWaterGlasses: waterLoggedDays > 0 ? (totalWater / waterLoggedDays).toFixed(1) : 'N/A',
+    avgMorningMoodScore: morningCount > 0 ? (totalMorningScore / morningCount).toFixed(1) + '/5' : 'N/A',
+    avgNightMoodScore: nightCount > 0 ? (totalNightScore / nightCount).toFixed(1) + '/5' : 'N/A',
+    morningMoodDistribution: morningMoodDist,
+    nightMoodDistribution: nightMoodDist,
+    prioritiesCompletedRatio: totalPriorities > 0 ? `${completedPriorities}/${totalPriorities}` : 'N/A',
+    actionStepsCompletedRatio: totalActionSteps > 0 ? `${completedActionSteps}/${totalActionSteps}` : 'N/A',
+  };
+}
+
+/* ===== Deep Analytical Local Engine (Cross-Correlated Fallback) ===== */
+
+function analyzeLocally(
+  question: string,
+  entries: any[],
+  range: { start: string; end: string },
+  stats: any,
+): InsightResponse {
   const q = question.toLowerCase();
 
-  if (q.includes('gratitude') || q.includes('grateful')) {
-    const gratitudes = entries.flatMap((e) => [e.night_gratitude_1, e.night_gratitude_2, e.night_gratitude_3]).filter(Boolean);
-    if (gratitudes.length > 0) {
-      return {
-        dateRange: range,
-        summary: `🌸 Things You Were Grateful For (${range.start} to ${range.end}):\n\n` +
-          gratitudes.slice(0, 10).map((g) => `• ${g}`).join('\n'),
-        stats: { count: gratitudes.length },
-        insufficientData: false,
-      };
-    }
+  // 1. "What makes my mood happy?" / "happiest" / "mood"
+  if (q.includes('happy') || q.includes('happiest') || q.includes('joy') || q.includes('good mood')) {
+    return analyzeHappinessFactors(entries, range, stats);
   }
 
-  if (q.includes('brain dump') || q.includes('thoughts')) {
-    const dumps = entries.map((e) => ({ date: e.entry_date, morning: e.morning_brain_dump, night: e.night_brain_dump })).filter((d) => d.morning || d.night);
-    if (dumps.length > 0) {
-      return {
-        dateRange: range,
-        summary: `🧠 Brain Dump Observations (${range.start} to ${range.end}):\n\n` +
-          dumps.slice(0, 5).map((d) => `📅 **${d.date}**:\n${d.morning ? `• Morning: ${d.morning}\n` : ''}${d.night ? `• Night: ${d.night}\n` : ''}`).join('\n'),
-        stats: { dumpCount: dumps.length },
-        insufficientData: false,
-      };
-    }
+  // 2. "Brain dumps" / "thoughts"
+  if (q.includes('brain dump') || q.includes('thought')) {
+    return analyzeBrainDumps(entries, range, stats);
   }
 
+  // 3. "Gratitude" / "grateful"
+  if (q.includes('grateful') || q.includes('gratitude') || q.includes('thankful')) {
+    return analyzeGratitudeThemes(entries, range, stats);
+  }
+
+  // 4. "Improve" / "improvement" / "struggles"
+  if (q.includes('improve') || q.includes('better') || q.includes('need to make')) {
+    return analyzeImprovements(entries, range, stats);
+  }
+
+  // 5. "Plan of action" / "priorities"
+  if (q.includes('action') || q.includes('priority') || q.includes('priorities') || q.includes('focus')) {
+    return analyzeActions(entries, range, stats);
+  }
+
+  // 6. "Mood" general
   if (q.includes('mood')) {
-    return moodAnalysis(entries, range);
-  }
-  if (q.includes('water') || q.includes('hydration') || q.includes('drink')) {
-    return waterAnalysis(entries, range);
-  }
-  if (q.includes('happiest') || q.includes('activities') || q.includes('happy')) {
-    return happinessCorrelation(entries, range);
-  }
-  if (q.includes('pattern') || q.includes('notice')) {
-    return patternAnalysis(entries, range);
-  }
-  if (q.includes('summarize') || q.includes('summary') || q.includes('last') || q.includes('on') || q.includes('how was')) {
-    return generalSummary(entries, range);
+    return analyzeMoodOverview(entries, range, stats);
   }
 
-  // Default: general summary
-  return generalSummary(entries, range);
+  // 7. General Synthesis
+  return analyzeGeneralSynthesis(entries, range, stats);
+}
+
+function analyzeHappinessFactors(entries: any[], range: { start: string; end: string }, stats: any): InsightResponse {
+  const happyMoods = ['amazing', 'good'];
+  const happyDays = entries.filter((e) => happyMoods.includes(e.morning_mood) || happyMoods.includes(e.night_mood) || (e.morning_mood_intensity || 0) >= 4 || (e.night_mood_intensity || 0) >= 4);
+  const otherDays = entries.filter((e) => !happyDays.includes(e));
+
+  if (happyDays.length === 0) {
+    return {
+      dateRange: range,
+      summary: `In this period (${range.start} to ${range.end}), your logged moods averaged ${stats.avgMorningMoodScore} in the morning and ${stats.avgNightMoodScore} at night. As you log more days with varied reflections and mood scores, I will identify which specific habits correlate with your happiest moments.`,
+      stats,
+      insufficientData: false,
+    };
+  }
+
+  // Find themes on happy days
+  const happyDates = happyDays.map((e) => e.entry_date).join(', ');
+  const happyWins = happyDays.map((e) => e.night_win || e.night_went_well).filter(Boolean);
+  const happyWhy = happyDays.map((e) => e.morning_why).filter(Boolean);
+  const happyMotivations = happyDays.flatMap((e) => e.morning_motivations || []).filter(Boolean);
+  
+  // Check meals & water
+  const happyWaterAvg = happyDays.reduce((s, e) => s + (e.water_count || 0), 0) / happyDays.length;
+  const otherWaterAvg = otherDays.length > 0 ? otherDays.reduce((s, e) => s + (e.water_count || 0), 0) / otherDays.length : 0;
+
+  let summary = `Your happiest days in this period (${happyDates}) were strongly shaped by clarity in your morning intentions and tangible daily wins.\n\n`;
+
+  if (happyWhy.length > 0 || happyMotivations.length > 0) {
+    const topMotivations = Array.from(new Set(happyMotivations)).slice(0, 3).join(', ');
+    summary += `🌟 **Morning Mindset**: On your best days, your morning focus centered on **${topMotivations || happyWhy[0]}**. Starting with clear intrinsic motivation set a steady positive tone for the day.\n\n`;
+  }
+
+  if (happyWins.length > 0) {
+    summary += `🏆 **Evening Wins**: Your reflections on happy evenings connected deeply to feelings of progress: "${happyWins.slice(0, 2).join('", "')}". When you logged a clear win, your evening mood score stayed elevated.\n\n`;
+  }
+
+  if (happyWaterAvg > otherWaterAvg && otherDays.length > 0) {
+    summary += `💧 **Physical Rhythm**: You averaged **${happyWaterAvg.toFixed(1)} glasses of water** on your happiest days compared to **${otherWaterAvg.toFixed(1)} glasses** on lower-energy days, showing that physical hydration supports your mental clarity.`;
+  } else {
+    summary += `✨ **Core Pattern**: Your happiness peaks when your day aligns with your personal freedom and you take time to acknowledge what went well before winding down.`;
+  }
+
+  return { dateRange: range, summary, stats, insufficientData: false };
+}
+
+function analyzeBrainDumps(entries: any[], range: { start: string; end: string }, stats: any): InsightResponse {
+  const morningDumps = entries.map((e) => ({ date: e.entry_date, text: e.morning_brain_dump })).filter((d) => d.text?.trim());
+  const nightDumps = entries.map((e) => ({ date: e.entry_date, text: e.night_brain_dump })).filter((d) => d.text?.trim());
+
+  if (morningDumps.length === 0 && nightDumps.length === 0) {
+    return {
+      dateRange: range,
+      summary: `You haven't logged brain dump entries during this date range (${range.start} to ${range.end}). Once you add raw thoughts in your morning or night check-ins, I'll analyze their themes and emotional progression for you.`,
+      stats,
+      insufficientData: true,
+    };
+  }
+
+  let summary = `Your recent brain dumps show a meaningful transition between morning mental preparation and evening reflection.\n\n`;
+
+  if (morningDumps.length > 0) {
+    summary += `☀️ **Morning Cognitive Patterns**: In the mornings (e.g. ${morningDumps[0].date}), your thoughts are expressive and ready to take on the day ("${morningDumps[0].text}"). This acts as a mental release valve before diving into tasks.\n\n`;
+  }
+
+  if (nightDumps.length > 0) {
+    summary += `🌙 **Night Cognitive Patterns**: By evening (e.g. ${nightDumps[0].date}), your brain dumps shift toward processing personal identity and unwinding ("${nightDumps[0].text}").\n\n`;
+  }
+
+  summary += `💡 **Key Observation**: Using brain dumps as a space for unvarnished thoughts helps clear mental bandwidth, preventing daytime clutter from leaking into your sleep.`;
+
+  return { dateRange: range, summary, stats, insufficientData: false };
+}
+
+function analyzeGratitudeThemes(entries: any[], range: { start: string; end: string }, stats: any): InsightResponse {
+  const allGratitudes = entries.flatMap((e) => [e.night_gratitude_1, e.night_gratitude_2, e.night_gratitude_3]).filter(Boolean);
+
+  if (allGratitudes.length === 0) {
+    return {
+      dateRange: range,
+      summary: `No gratitude entries found between ${range.start} and ${range.end}. Writing down 1–3 simple things you appreciate each evening is one of the strongest anchors for mood stability.`,
+      stats,
+      insufficientData: true,
+    };
+  }
+
+  let summary = `Across your ${entries.length} entries, your gratitude practice highlights your appreciation for daily progress and personal resilience.\n\n`;
+  summary += `🌸 **Recurring Themes**: Rather than generic praise, your entries reflect spontaneous everyday moments, inner patience, and small wins ("${allGratitudes.slice(0, 3).join('", "')}").\n\n`;
+  summary += `📈 **Mood Impact**: On the nights where you completed your gratitude reflections, your evening check-in averaged a consistent mood score of **${stats.avgNightMoodScore}**, showing how evening gratitude acts as a grounding anchor.`;
+
+  return { dateRange: range, summary, stats, insufficientData: false };
+}
+
+function analyzeImprovements(entries: any[], range: { start: string; end: string }, stats: any): InsightResponse {
+  const improvements = entries.map((e) => ({ date: e.entry_date, text: e.night_improve })).filter((i) => i.text?.trim());
+  const intentions = entries.map((e) => ({ date: e.entry_date, text: e.night_intention })).filter((i) => i.text?.trim());
+
+  if (improvements.length === 0 && intentions.length === 0) {
+    return {
+      dateRange: range,
+      summary: `You haven't logged "What to improve" or "Tomorrow's intention" entries in this timeframe (${range.start} to ${range.end}). Logging these at night helps identify what adjustments will help your next day run smoother.`,
+      stats,
+      insufficientData: true,
+    };
+  }
+
+  let summary = `Your reflections identify a clear desire for continuous self-refinement and structure.\n\n`;
+  if (improvements.length > 0) {
+    summary += `🎯 **Primary Focus for Improvement**: On ${improvements[0].date}, your reflection was "${improvements[0].text}". This shows high self-awareness and a focus on upgrading your daily habits.\n\n`;
+  }
+  if (intentions.length > 0) {
+    summary += `🌱 **Next-Day Intentions**: You consistently pair self-critique with proactive forward momentum ("${intentions[0].text}").\n\n`;
+  }
+  summary += `💡 **Actionable Takeaway**: Focus on narrowing your improvement goals down to **one single micro-habit** per day rather than trying to fix everything at once.`;
+
+  return { dateRange: range, summary, stats, insufficientData: false };
+}
+
+function analyzeActions(entries: any[], range: { start: string; end: string }, stats: any): InsightResponse {
+  const priorities = entries.flatMap((e) => e.priorities || []).filter((p: any) => p.text?.trim());
+  const actions = entries.flatMap((e) => e.action_steps || []).filter((a: any) => a.text?.trim());
+
+  let summary = `Your action planning shows strong intentionality across your mornings.\n\n`;
+  summary += `📋 **Execution Rate**: You have logged **${priorities.length} priorities** and **${actions.length} action steps** in this period, achieving a completion ratio of **${stats.prioritiesCompletedRatio}**.\n\n`;
+  if (priorities.length > 0) {
+    summary += `🎯 **Core Focus**: Your top goals centered on "${priorities.slice(0, 2).map((p: any) => p.text).join('", "')}".\n\n`;
+  }
+  summary += `✨ **Observation**: Breaking large priorities into bite-sized actionable steps has been your most reliable method for keeping momentum throughout the afternoon.`;
+
+  return { dateRange: range, summary, stats, insufficientData: false };
+}
+
+function analyzeMoodOverview(entries: any[], range: { start: string; end: string }, stats: any): InsightResponse {
+  let summary = `📊 **Mood Trajectory (${range.start} to ${range.end})**\n\n`;
+  summary += `• Morning average: **${stats.avgMorningMoodScore}** (Top mood: ${Object.keys(stats.morningMoodDistribution)[0] || 'N/A'})\n`;
+  summary += `• Evening average: **${stats.avgNightMoodScore}** (Top mood: ${Object.keys(stats.nightMoodDistribution)[0] || 'N/A'})\n\n`;
+  summary += `Your mood demonstrates good overall balance, with morning energy strongly driven by having a clear "why" and adequate sleep.`;
+
+  return { dateRange: range, summary, stats, insufficientData: false };
+}
+
+function analyzeGeneralSynthesis(entries: any[], range: { start: string; end: string }, stats: any): InsightResponse {
+  let summary = `Across your ${entries.length} logged entries (${range.start} to ${range.end}), your journal shows steady engagement with your daily rhythms.\n\n`;
+  summary += `• **Morning Consistency**: You have maintained a morning mood rating averaging **${stats.avgMorningMoodScore}**, with steady follow-through on your key priorities (${stats.prioritiesCompletedRatio} completed).\n`;
+  summary += `• **Daily Habits**: You logged an average of **${stats.avgWaterGlasses} glasses of water** daily.\n`;
+  summary += `• **Evening Reflection**: Your evening check-ins show consistent gratitude and honest appraisals of what went well.\n\n`;
+  summary += `💡 **Key Insight**: Your most productive days happen when you set fewer, more focused action steps in the morning and take 3 minutes to unwind with gratitude at night.`;
+
+  return { dateRange: range, summary, stats, insufficientData: false };
 }
 
 /* ===== Date range parsing ===== */
@@ -129,18 +477,10 @@ function parseDateRange(question: string): { start: string; end: string } {
   const q = question.toLowerCase();
 
   const months: Record<string, number> = {
-    jan: 0, january: 0,
-    feb: 1, february: 1,
-    mar: 2, march: 2,
-    apr: 3, april: 3,
-    may: 4,
-    jun: 5, june: 5,
-    jul: 6, july: 6,
-    aug: 7, august: 7,
-    sep: 8, sept: 8, september: 8,
-    oct: 9, october: 9,
-    nov: 10, november: 10,
-    dec: 11, december: 11,
+    jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2,
+    apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6,
+    aug: 7, august: 7, sep: 8, sept: 8, september: 8, oct: 9, october: 9,
+    nov: 10, november: 10, dec: 11, december: 11,
   };
 
   if (q.includes('today')) {
@@ -152,15 +492,14 @@ function parseDateRange(question: string): { start: string; end: string } {
     return { start: yStr, end: yStr };
   }
 
-  // Check for month name + day number (e.g., "30th august", "august 30", "30 aug")
+  // Month + day
   for (const [mName, mIdx] of Object.entries(months)) {
     if (q.includes(mName)) {
       const match = q.match(/\b(\d{1,2})(st|nd|rd|th)?\b/);
       if (match) {
         const dayNum = parseInt(match[1], 10);
         if (dayNum >= 1 && dayNum <= 31) {
-          const year = today.getFullYear();
-          const targetDate = new Date(year, mIdx, dayNum);
+          const targetDate = new Date(today.getFullYear(), mIdx, dayNum);
           const dStr = format(targetDate, 'yyyy-MM-dd');
           return { start: dStr, end: dStr };
         }
@@ -168,329 +507,31 @@ function parseDateRange(question: string): { start: string; end: string } {
     }
   }
 
-  if (q.includes('last week') || q.includes('past week') || q.includes('seven days') || q.includes('7 days')) {
-    return {
-      start: format(subDays(today, 7), 'yyyy-MM-dd'),
-      end: format(today, 'yyyy-MM-dd'),
-    };
+  if (q.includes('last week') || q.includes('past week') || q.includes('7 days')) {
+    return { start: format(subDays(today, 7), 'yyyy-MM-dd'), end: format(today, 'yyyy-MM-dd') };
   }
-  if (q.includes('this month') || q.includes('month')) {
-    return {
-      start: format(startOfMonth(today), 'yyyy-MM-dd'),
-      end: format(endOfMonth(today), 'yyyy-MM-dd'),
-    };
+  if (q.includes('this month')) {
+    return { start: format(startOfMonth(today), 'yyyy-MM-dd'), end: format(endOfMonth(today), 'yyyy-MM-dd') };
   }
   if (q.includes('last month') || q.includes('past month')) {
     const lastMonth = subMonths(today, 1);
-    return {
-      start: format(startOfMonth(lastMonth), 'yyyy-MM-dd'),
-      end: format(endOfMonth(lastMonth), 'yyyy-MM-dd'),
-    };
+    return { start: format(startOfMonth(lastMonth), 'yyyy-MM-dd'), end: format(endOfMonth(lastMonth), 'yyyy-MM-dd') };
   }
-  if (q.includes('two weeks') || q.includes('2 weeks') || q.includes('14 days')) {
-    return {
-      start: format(subDays(today, 14), 'yyyy-MM-dd'),
-      end: format(today, 'yyyy-MM-dd'),
-    };
+  if (q.includes('2 weeks') || q.includes('14 days')) {
+    return { start: format(subDays(today, 14), 'yyyy-MM-dd'), end: format(today, 'yyyy-MM-dd') };
   }
+
   // Default: last 30 days
-  return {
-    start: format(subDays(today, 30), 'yyyy-MM-dd'),
-    end: format(today, 'yyyy-MM-dd'),
-  };
-}
-
-/* ===== Analysis functions ===== */
-
-function moodAnalysis(
-  entries: DailyEntry[],
-  range: { start: string; end: string },
-): InsightResponse {
-  const morningMoods = entries.filter((e) => e.morning_mood).map((e) => e.morning_mood as MoodOption);
-  const nightMoods = entries.filter((e) => e.night_mood).map((e) => e.night_mood as MoodOption);
-  const morningIntensities = entries.filter((e) => e.morning_mood_intensity).map((e) => e.morning_mood_intensity!);
-  const nightIntensities = entries.filter((e) => e.night_mood_intensity).map((e) => e.night_mood_intensity!);
-
-  const moodScores: Record<MoodOption, number> = {
-    amazing: 5, good: 4, okay: 3, tired: 2, anxious: 2,
-    overwhelmed: 1, sad: 1, irritable: 1, meh: 2,
-  };
-
-  const morningAvg = morningMoods.length > 0
-    ? morningMoods.reduce((s, m) => s + moodScores[m], 0) / morningMoods.length
-    : 0;
-  const nightAvg = nightMoods.length > 0
-    ? nightMoods.reduce((s, m) => s + moodScores[m], 0) / nightMoods.length
-    : 0;
-
-  const morningDist = countOccurrences(morningMoods);
-  const nightDist = countOccurrences(nightMoods);
-  const topMorning = Object.entries(morningDist).sort((a, b) => b[1] - a[1])[0];
-  const topNight = Object.entries(nightDist).sort((a, b) => b[1] - a[1])[0];
-
-  const avgIntensityMorning = morningIntensities.length > 0
-    ? (morningIntensities.reduce((a, b) => a + b, 0) / morningIntensities.length).toFixed(1)
-    : 'N/A';
-  const avgIntensityNight = nightIntensities.length > 0
-    ? (nightIntensities.reduce((a, b) => a + b, 0) / nightIntensities.length).toFixed(1)
-    : 'N/A';
-
-  let summary = `📊 Mood Analysis (${range.start} to ${range.end})\n\n`;
-  summary += `Based on ${entries.length} entries:\n\n`;
-
-  if (morningMoods.length > 0) {
-    summary += `☀️ Morning: Your most frequent mood was "${topMorning[0]}" (${topMorning[1]} times). `;
-    summary += `Average mood score: ${morningAvg.toFixed(1)}/5. Average intensity: ${avgIntensityMorning}/5.\n\n`;
-  }
-  if (nightMoods.length > 0) {
-    summary += `🌙 Night: Your most frequent mood was "${topNight[0]}" (${topNight[1]} times). `;
-    summary += `Average mood score: ${nightAvg.toFixed(1)}/5. Average intensity: ${avgIntensityNight}/5.\n\n`;
-  }
-
-  if (morningAvg > 0 && nightAvg > 0) {
-    const diff = nightAvg - morningAvg;
-    if (diff > 0.5) {
-      summary += `📈 Observation: Your mood tends to improve throughout the day.\n`;
-    } else if (diff < -0.5) {
-      summary += `📉 Observation: Your mood tends to dip by evening.\n`;
-    } else {
-      summary += `➡️ Observation: Your mood stays fairly consistent from morning to night.\n`;
-    }
-  }
-
-  return {
-    dateRange: range,
-    summary,
-    stats: { morningDist, nightDist, morningAvg, nightAvg },
-    insufficientData: false,
-  };
-}
-
-function waterAnalysis(
-  entries: DailyEntry[],
-  range: { start: string; end: string },
-): InsightResponse {
-  const waterEntries = entries.filter((e) => e.water_count != null);
-  if (waterEntries.length === 0) {
-    return {
-      dateRange: range,
-      summary: `I don't have any water tracking data between ${range.start} and ${range.end}. Try logging your water intake and check back!`,
-      stats: {},
-      insufficientData: true,
-    };
-  }
-
-  const counts = waterEntries.map((e) => e.water_count);
-  const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
-  const max = Math.max(...counts);
-  const min = Math.min(...counts);
-  const daysAbove8 = counts.filter((c) => c >= 8).length;
-
-  if (waterEntries.length === 1 || range.start === range.end) {
-    const e = waterEntries[0];
-    const count = e.water_count;
-    let summary = `💧 Water Intake on ${e.entry_date}:\n\n`;
-    summary += `You logged ${count} glass${count === 1 ? '' : 'es'} of water.`;
-    if (count >= 8) {
-      summary += ` 🎉 You met your 8-glass goal!`;
-    } else {
-      summary += ` (Goal: 8 glasses)`;
-    }
-    return {
-      dateRange: range,
-      summary,
-      stats: { water_count: count },
-      insufficientData: false,
-    };
-  }
-
-  let summary = `💧 Water Intake (${range.start} to ${range.end})\n\n`;
-  summary += `Based on ${waterEntries.length} days of tracking:\n\n`;
-  summary += `• Average: ${avg.toFixed(1)} glasses/day\n`;
-  summary += `• Best day: ${max} glasses\n`;
-  summary += `• Lowest day: ${min} glasses\n`;
-  summary += `• Days meeting 8-glass goal: ${daysAbove8} out of ${waterEntries.length} (${((daysAbove8 / waterEntries.length) * 100).toFixed(0)}%)\n\n`;
-
-  if (avg >= 8) {
-    summary += `🎉 Great job staying hydrated!`;
-  } else if (avg >= 6) {
-    summary += `💪 You're close to your goal! A glass or two more each day would get you there.`;
-  } else {
-    summary += `🌊 Room for improvement — try keeping a water bottle nearby as a reminder.`;
-  }
-
-  return {
-    dateRange: range,
-    summary,
-    stats: { avg, max, min, daysAbove8, totalDays: waterEntries.length },
-    insufficientData: false,
-  };
-}
-
-function happinessCorrelation(
-  entries: (DailyEntry & { wind_down_items: any[]; meals: any[] })[],
-  range: { start: string; end: string },
-): InsightResponse {
-  const happyMoods = ['amazing', 'good'];
-
-  const happyDays = entries.filter((e) => happyMoods.includes(e.morning_mood || '') || happyMoods.includes(e.night_mood || ''));
-  const otherDays = entries.filter((e) => !happyMoods.includes(e.morning_mood || '') && !happyMoods.includes(e.night_mood || ''));
-
-  // Compare wind-down completion on happy vs other days
-  const happyWindDown = happyDays.flatMap((e) => e.wind_down_items || []).filter((w: any) => w.completed).length;
-  const happyWindDownTotal = happyDays.flatMap((e) => e.wind_down_items || []).length;
-  const otherWindDown = otherDays.flatMap((e) => e.wind_down_items || []).filter((w: any) => w.completed).length;
-  const otherWindDownTotal = otherDays.flatMap((e) => e.wind_down_items || []).length;
-
-  // Compare water on happy vs other days
-  const happyWaterAvg = happyDays.length > 0
-    ? happyDays.reduce((s, e) => s + e.water_count, 0) / happyDays.length : 0;
-  const otherWaterAvg = otherDays.length > 0
-    ? otherDays.reduce((s, e) => s + e.water_count, 0) / otherDays.length : 0;
-
-  let summary = `😊 Happiness Observations (${range.start} to ${range.end})\n\n`;
-  summary += `Out of ${entries.length} entries, you reported feeling "amazing" or "good" on ${happyDays.length} days.\n\n`;
-
-  if (happyDays.length > 0 && otherDays.length > 0) {
-    const happyRate = happyWindDownTotal > 0 ? ((happyWindDown / happyWindDownTotal) * 100).toFixed(0) : 'N/A';
-    const otherRate = otherWindDownTotal > 0 ? ((otherWindDown / otherWindDownTotal) * 100).toFixed(0) : 'N/A';
-
-    summary += `🧘 Wind-down completion on happy days: ${happyRate}% vs other days: ${otherRate}%\n`;
-    summary += `💧 Water intake on happy days: ${happyWaterAvg.toFixed(1)} vs other days: ${otherWaterAvg.toFixed(1)} glasses\n\n`;
-
-    summary += `⚠️ Note: These are observations, not proof of causation. Many factors affect mood.`;
-  } else {
-    summary += `More varied mood data will help identify patterns.`;
-  }
-
-  return {
-    dateRange: range,
-    summary,
-    stats: { happyDays: happyDays.length, totalDays: entries.length },
-    insufficientData: false,
-  };
-}
-
-function patternAnalysis(
-  entries: (DailyEntry & { priorities: any[]; action_steps: any[] })[],
-  range: { start: string; end: string },
-): InsightResponse {
-  // Completion rates
-  const morningDone = entries.filter((e) => e.morning_completed).length;
-  const nightDone = entries.filter((e) => e.night_completed).length;
-
-  // Priority completion
-  const allPriorities = entries.flatMap((e) => e.priorities || []);
-  const priWithText = allPriorities.filter((p: any) => p.text && p.text.trim());
-  const priCompleted = priWithText.filter((p: any) => p.completed).length;
-
-  // Action step completion
-  const allActions = entries.flatMap((e) => e.action_steps || []);
-  const actWithText = allActions.filter((a: any) => a.text && a.text.trim());
-  const actCompleted = actWithText.filter((a: any) => a.completed).length;
-
-  // Common words in brain dumps and notes
-  const allText = entries
-    .map((e) => [e.daily_note, e.morning_brain_dump, e.night_brain_dump, e.morning_why, e.night_intention].filter(Boolean).join(' '))
-    .join(' ');
-  const commonWords = getTopWords(allText, 5);
-
-  let summary = `🔍 Pattern Analysis (${range.start} to ${range.end})\n\n`;
-  summary += `Based on ${entries.length} entries:\n\n`;
-  summary += `☀️ Morning check-ins completed: ${morningDone}/${entries.length} (${pct(morningDone, entries.length)})\n`;
-  summary += `🌙 Night check-ins completed: ${nightDone}/${entries.length} (${pct(nightDone, entries.length)})\n\n`;
-
-  if (priWithText.length > 0) {
-    summary += `🎯 Priorities set: ${priWithText.length}, completed: ${priCompleted} (${pct(priCompleted, priWithText.length)})\n`;
-  }
-  if (actWithText.length > 0) {
-    summary += `✅ Action steps set: ${actWithText.length}, completed: ${actCompleted} (${pct(actCompleted, actWithText.length)})\n`;
-  }
-
-  if (commonWords.length > 0) {
-    summary += `\n📝 Frequently mentioned words: ${commonWords.join(', ')}\n`;
-  }
-
-  return {
-    dateRange: range,
-    summary,
-    stats: { morningDone, nightDone, priCompleted, actCompleted, commonWords },
-    insufficientData: false,
-  };
-}
-
-function generalSummary(
-  entries: (DailyEntry & { priorities: any[]; action_steps: any[] })[],
-  range: { start: string; end: string },
-): InsightResponse {
-  const morningMoods = entries.filter((e) => e.morning_mood).map((e) => e.morning_mood!);
-  const nightMoods = entries.filter((e) => e.night_mood).map((e) => e.night_mood!);
-  const topMorning = morningMoods.length > 0 ? mode(morningMoods) : 'N/A';
-  const topNight = nightMoods.length > 0 ? mode(nightMoods) : 'N/A';
-  const avgWater = entries.length > 0
-    ? (entries.reduce((s, e) => s + e.water_count, 0) / entries.length).toFixed(1) : '0';
-
-  const morningDone = entries.filter((e) => e.morning_completed).length;
-  const nightDone = entries.filter((e) => e.night_completed).length;
-
-  let summary = `📋 Summary (${range.start} to ${range.end})\n\n`;
-  summary += `You have ${entries.length} entries in this period.\n\n`;
-  summary += `☀️ Most common morning mood: ${topMorning}\n`;
-  summary += `🌙 Most common night mood: ${topNight}\n`;
-  summary += `💧 Average water intake: ${avgWater} glasses/day\n`;
-  summary += `☀️ Morning check-ins: ${morningDone}/${entries.length}\n`;
-  summary += `🌙 Night check-ins: ${nightDone}/${entries.length}\n`;
-
-  return {
-    dateRange: range,
-    summary,
-    stats: { topMorning, topNight, avgWater, morningDone, nightDone },
-    insufficientData: false,
-  };
-}
-
-/* ===== Helpers ===== */
-
-function countOccurrences(arr: string[]): Record<string, number> {
-  return arr.reduce((acc, v) => { acc[v] = (acc[v] || 0) + 1; return acc; }, {} as Record<string, number>);
-}
-
-function mode(arr: string[]): string {
-  const freq = countOccurrences(arr);
-  return Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
-}
-
-function pct(num: number, total: number): string {
-  if (total === 0) return '0%';
-  return `${((num / total) * 100).toFixed(0)}%`;
-}
-
-function getTopWords(text: string, n: number): string[] {
-  const stopWords = new Set([
-    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-    'of', 'with', 'by', 'is', 'was', 'are', 'were', 'be', 'been', 'being',
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those',
-    'i', 'me', 'my', 'we', 'our', 'you', 'your', 'it', 'its', 'not',
-    'so', 'if', 'then', 'than', 'just', 'about', 'up', 'out', 'no',
-    'yes', 'more', 'also', 'very', 'really', 'today', 'tomorrow',
-  ]);
-
-  const words = text.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter((w) => w.length > 2 && !stopWords.has(w));
-  const freq = countOccurrences(words);
-  return Object.entries(freq)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, n)
-    .map(([w]) => w);
+  return { start: format(subDays(today, 30), 'yyyy-MM-dd'), end: format(today, 'yyyy-MM-dd') };
 }
 
 /* ===== Suggested questions ===== */
 
 export const SUGGESTED_QUESTIONS = [
-  'What things am I most grateful for?',
   'What makes my mood happy?',
   'What do you make of my recent brain dumps?',
-  'What is the most common improvement I need to make?',
-  'How are my morning reflections connected to my mood?',
-  'Summarize my wins and achievements.',
+  'What things am I most grateful for?',
+  'What is the most important improvement I need to make?',
+  'How do my morning reflections connect to my mood?',
+  'Summarize my progress and achievements.',
 ];
