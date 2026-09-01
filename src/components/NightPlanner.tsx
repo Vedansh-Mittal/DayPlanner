@@ -7,7 +7,7 @@ import {
   MEAL_TYPES, WIND_DOWN_TYPES,
   type DailyEntry, type Medication, type Meal, type WindDownItem,
 } from '../types/database';
-import { getMedicationPresets, deleteMedicationPreset, parseMedicationFields } from '../hooks/useDailyEntry';
+import { getMedicationPresets, deleteMedicationPreset, parseMedicationFields, isMedicationShorthand } from '../hooks/useDailyEntry';
 import {
   Moon, Pill, UtensilsCrossed, Heart, Trophy,
   ThumbsUp, Lightbulb, Brain, Star, Plus, Trash2, Shield, Sparkles, X,
@@ -44,7 +44,26 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
   const [presetRefreshKey, setPresetRefreshKey] = useState(0);
   const waterCount = entry?.water_count || 0;
 
-  const handleNameBlur = (medId: string, rawName: string, currentDose?: string | null) => {
+  const handleNameBlur = (medId: string, rawName: string, currentDose?: string | null, currentTime?: string | null) => {
+    const trimmed = (rawName || '').trim();
+    if (!trimmed) return;
+
+    if (isMedicationShorthand(trimmed)) {
+      const currentPresets = getMedicationPresets();
+      if (currentPresets.length > 0) {
+        removeMedication(medId);
+        currentPresets.forEach((p) => {
+          addMedication({
+            name: p.name,
+            dose: p.dose || '',
+            time: currentTime || p.time || '',
+            taken: true,
+          });
+        });
+        return;
+      }
+    }
+
     const { name: cleanName, dose: cleanDose } = parseMedicationFields(rawName, currentDose);
     if (cleanName !== rawName) {
       updateMedication(medId, 'name', cleanName);
@@ -164,7 +183,7 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
                     placeholder="e.g., Vitamin D, Aspirin"
                     value={med.name || ''}
                     onChange={(e) => updateMedication(med.id, 'name', e.target.value)}
-                    onBlur={() => handleNameBlur(med.id, med.name || '', med.dose)}
+                    onBlur={() => handleNameBlur(med.id, med.name || '', med.dose, med.time)}
                     disabled={disabled}
                   />
                 </div>

@@ -98,6 +98,11 @@ export function parseMedicationFields(
   return { name, dose };
 }
 
+export function isMedicationShorthand(name: string): boolean {
+  const n = (name || '').trim().toLowerCase();
+  return /^(again\s+both|again|same\s+both|same\s+meds?|same\s+as\s+yesterday|both|all\s+meds|repeat(\s+yesterday)?|ditto)$/i.test(n);
+}
+
 /** Get all medication presets saved when user checks Taken */
 export function getMedicationPresets(): MedicationPreset[] {
   try {
@@ -105,7 +110,7 @@ export function getMedicationPresets(): MedicationPreset[] {
     if (!savedStr) return [];
     const list: MedicationPreset[] = JSON.parse(savedStr);
     return Array.isArray(list)
-      ? list.filter((p) => p && typeof p.name === 'string' && p.name.trim().length >= 2)
+      ? list.filter((p) => p && typeof p.name === 'string' && p.name.trim().length >= 2 && !isMedicationShorthand(p.name))
       : [];
   } catch {
     return [];
@@ -116,15 +121,36 @@ export function getMedicationPresets(): MedicationPreset[] {
 export function saveMedicationPreset(rawName: string, rawDose?: string | null, rawTime?: string | null) {
   const { name: cleanName, dose: cleanDose } = parseMedicationFields(rawName, rawDose);
   if (!cleanName || cleanName.length < 2) return;
+
+  // Never save conversational shorthand as preset names
+  if (isMedicationShorthand(cleanName)) return;
+
+  // Split compound names like "inspiral and inderel", "Zinc & Magnesium", "Calcium + D3"
+  const splitNames = cleanName
+    .split(/\s+(?:and|&|\+)\s+|,\s*/i)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 2 && !isMedicationShorthand(s));
+
+  if (splitNames.length === 0) return;
+
   try {
     const list = getMedicationPresets();
     const map = new Map<string, MedicationPreset>();
-    list.forEach((p) => map.set(p.name.toLowerCase(), p));
-    map.set(cleanName.toLowerCase(), {
-      name: cleanName,
-      dose: cleanDose || null,
-      time: (rawTime || '').trim() || null,
+    list.forEach((p) => {
+      if (!isMedicationShorthand(p.name)) {
+        map.set(p.name.toLowerCase(), p);
+      }
     });
+
+    splitNames.forEach((singleName) => {
+      const formatted = singleName.charAt(0).toUpperCase() + singleName.slice(1);
+      map.set(formatted.toLowerCase(), {
+        name: formatted,
+        dose: cleanDose || null,
+        time: (rawTime || '').trim() || null,
+      });
+    });
+
     localStorage.setItem('mewwmory_medication_presets', JSON.stringify(Array.from(map.values())));
   } catch (e) {
     console.error('Error saving medication preset:', e);

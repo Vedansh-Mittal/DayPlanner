@@ -29,6 +29,7 @@ FORMATTING GUIDELINES:
 - Break explanations into short, readable paragraphs (2-3 sentences each). If explaining multiple factors, use bullet points so it is effortless to read on mobile.
 - Connect the dots between what they thought, did, ate, drank, and felt without jumping to clinical conclusions.
 - If the user asks about a medication, supplement, vitamin, or dosage (e.g. "my vitamin D dosage on 2nd august"), locate that medication from the Medications & Supplements section for that date, and clearly state the medication name, dose, scheduled time, and whether it was marked taken.
+- If a user wrote conversational shorthand in their medication logs such as "again both", "same as yesterday", "same meds", "repeat", or "ditto", intelligently resolve it to mean the medications/supplements logged on the previous day with that time and dosage.
 - Keep it concise, focused, and deeply grounding (160–240 words).`;
 
 /* ===== Main query handler ===== */
@@ -334,17 +335,36 @@ function analyzeMedications(
   const q = question.toLowerCase();
   const allMeds: { date: string; name: string; dose?: string; time?: string; taken: boolean }[] = [];
 
-  for (const e of entries) {
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
     if (Array.isArray(e.medications)) {
       for (const m of e.medications) {
         if (m && m.name && m.name.trim()) {
-          allMeds.push({
-            date: e.entry_date,
-            name: m.name.trim(),
-            dose: m.dose || undefined,
-            time: m.time || undefined,
-            taken: !!m.taken,
-          });
+          const rawName = m.name.trim();
+          const isShorthand = /^(again\s+both|again|same\s+both|same\s+meds?|same\s+as\s+yesterday|both|all\s+meds|repeat|ditto)$/i.test(rawName);
+
+          if (isShorthand && i > 0 && Array.isArray(entries[i - 1].medications) && entries[i - 1].medications.length > 0) {
+            // Inherit names from previous day's medications
+            entries[i - 1].medications.forEach((prevM: any) => {
+              if (prevM && prevM.name?.trim()) {
+                allMeds.push({
+                  date: e.entry_date,
+                  name: `${prevM.name.trim()} (repeated)`,
+                  dose: m.dose || prevM.dose || undefined,
+                  time: m.time || prevM.time || undefined,
+                  taken: !!m.taken,
+                });
+              }
+            });
+          } else {
+            allMeds.push({
+              date: e.entry_date,
+              name: rawName,
+              dose: m.dose || undefined,
+              time: m.time || undefined,
+              taken: !!m.taken,
+            });
+          }
         }
       }
     }
