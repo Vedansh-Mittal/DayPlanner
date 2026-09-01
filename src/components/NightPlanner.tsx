@@ -23,6 +23,7 @@ interface NightPlannerProps {
   updateMedication: (id: string, field: keyof Medication, value: any) => void;
   addMedication: (initial?: Partial<Medication>) => void;
   removeMedication: (id: string) => void;
+  clearAllMedications?: () => void;
   updateMeal: (mealType: string, field: keyof Meal, value: any) => void;
   updateWindDown: (itemType: string, completed: boolean) => void;
   flushSave: () => void;
@@ -32,7 +33,7 @@ interface NightPlannerProps {
 
 export const NightPlanner: React.FC<NightPlannerProps> = ({
   entry, medications, meals, windDownItems, waterGoal,
-  updateField, updateMedication, addMedication, removeMedication,
+  updateField, updateMedication, addMedication, removeMedication, clearAllMedications,
   updateMeal, updateWindDown, flushSave,
   disabled = false, lockedReason,
 }) => {
@@ -228,6 +229,16 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
             <Plus size={16} />
             Add medication
           </button>
+          {medications.length > 0 && clearAllMedications && (
+            <button
+              type="button"
+              className="text-xs text-text-muted hover:text-red-500 font-medium px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              onClick={clearAllMedications}
+              disabled={disabled}
+            >
+              Clear all
+            </button>
+          )}
         </div>
 
         {/* Saved Presets (Created when user checks Taken) */}

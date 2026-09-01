@@ -42,7 +42,7 @@ export const PlannerPage: React.FC = () => {
     loading, saveStatus, error,
     updateField, updatePriority, updateActionStep,
     updateMeal, updateWindDown,
-    addMedication, removeMedication, updateMedication,
+    addMedication, removeMedication, clearAllMedications, updateMedication,
     flushSave,
   } = useDailyEntry(dateStr);
 
@@ -261,6 +261,7 @@ export const PlannerPage: React.FC = () => {
             updateMedication={updateMedication}
             addMedication={addMedication}
             removeMedication={removeMedication}
+            clearAllMedications={clearAllMedications}
             updateMeal={updateMeal}
             updateWindDown={updateWindDown}
             flushSave={flushSave}

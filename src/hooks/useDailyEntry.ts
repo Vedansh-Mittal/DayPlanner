@@ -677,22 +677,20 @@ export function useDailyEntry(dateStr: string) {
     scheduleSave();
   }, [user, scheduleSave]);
 
-  const removeMedication = useCallback(async (id: string) => {
-    if (!user) return;
-    if (!id.startsWith('temp_')) {
-      try {
-        await supabase.from('medications').delete().eq('id', id).eq('user_id', user.id);
-      } catch (e) {
-        console.warn('Remove medication warning:', e);
-      }
-    }
+  const removeMedication = useCallback((id: string) => {
     setMedications((prev) => {
       const next = prev.filter((m) => m.id !== id);
       medicationsRef.current = next;
       return next;
     });
     scheduleSave();
-  }, [user, scheduleSave]);
+  }, [scheduleSave]);
+
+  const clearAllMedications = useCallback(() => {
+    setMedications([]);
+    medicationsRef.current = [];
+    scheduleSave();
+  }, [scheduleSave]);
 
   const updateMedication = useCallback((id: string, field: keyof Medication, value: any) => {
     setMedications((prev) => {
@@ -728,7 +726,7 @@ export function useDailyEntry(dateStr: string) {
     loading, saveStatus, error,
     updateField, updatePriority, updateActionStep,
     updateMeal, updateWindDown,
-    addMedication, removeMedication, updateMedication,
+    addMedication, removeMedication, clearAllMedications, updateMedication,
     flushSave,
   };
 }
