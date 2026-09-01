@@ -526,12 +526,12 @@ export function useDailyEntry(dateStr: string) {
           .insert(medRows)
           .select();
         if (medData) {
-          medicationsRef.current = medData as Medication[];
-          setMedications(medData as Medication[]);
+          medData.forEach((row: any) => {
+            if (medicationsRef.current[row.sort_order]) {
+              medicationsRef.current[row.sort_order].daily_entry_id = savedId;
+            }
+          });
         }
-      } else {
-        medicationsRef.current = [];
-        setMedications([]);
       }
 
       setSaveStatus('saved');

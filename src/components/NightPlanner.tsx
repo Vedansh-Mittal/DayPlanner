@@ -135,9 +135,9 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
               <span></span>
             </div>
 
-            {medications.map((med) => (
+            {medications.map((med, idx) => (
               <div 
-                key={med.id} 
+                key={med.id || `med_row_${idx}`} 
                 className="p-3 md:p-0 bg-cream/30 dark:bg-dark-bg/20 md:bg-transparent dark:md:bg-transparent rounded-2xl md:rounded-none border border-border/40 dark:border-dark-border/40 md:border-0 flex flex-col md:grid md:grid-cols-[1fr_100px_95px_56px_36px] gap-2.5 items-stretch md:items-center"
               >
                 {/* Col 1: Name */}
