@@ -9,9 +9,22 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "mewwmory-icon.png",
+      "src": "/icon-192.png",
       "type": "image/png",
-      "sizes": "any"
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/mewwmory-icon.png",
+      "type": "image/png",
+      "sizes": "any",
+      "purpose": "any"
     }
   ]
 }
