@@ -66,6 +66,38 @@ export interface MedicationPreset {
   time: string | null;
 }
 
+/** Smart Medication & Dosage parser */
+export function parseMedicationFields(
+  rawName: string,
+  currentDose?: string | null
+): { name: string; dose: string | null } {
+  let name = (rawName || '').trim();
+  let dose = (currentDose || '').trim() || null;
+
+  if (!name) return { name: '', dose };
+
+  // Match explicit dosage units attached at the end of the name:
+  // e.g. "Vitamin D 5mg", "Vitamin D 1000 IU", "Aspirin 75 mg", "Omega 3 500mcg", "Syrup 10ml"
+  const doseWithUnitRegex = /\s+(\d+(?:\.\d+)?\s*(?:mg|mcg|µg|ug|g|iu|ui|ml|l|tablets?|tabs?|capsules?|caps?|drops?|puffs?|units?|%))$/i;
+  const unitMatch = name.match(doseWithUnitRegex);
+
+  if (unitMatch) {
+    const extractedDose = unitMatch[1].trim();
+    const cleanedName = name.slice(0, unitMatch.index).trim();
+
+    if (cleanedName.length >= 2) {
+      name = cleanedName;
+      // If dose field was empty, populate with extracted dose.
+      // If user already specified a dose (e.g. "100mg" vs "5mg"), prefer what's in the dose field!
+      if (!dose) {
+        dose = extractedDose;
+      }
+    }
+  }
+
+  return { name, dose };
+}
+
 /** Get all medication presets saved when user checks Taken */
 export function getMedicationPresets(): MedicationPreset[] {
   try {
@@ -81,8 +113,8 @@ export function getMedicationPresets(): MedicationPreset[] {
 }
 
 /** Save or update a medication preset (called ONLY when user checks 'Taken: true') */
-export function saveMedicationPreset(name: string, dose?: string | null, time?: string | null) {
-  const cleanName = (name || '').trim();
+export function saveMedicationPreset(rawName: string, rawDose?: string | null, rawTime?: string | null) {
+  const { name: cleanName, dose: cleanDose } = parseMedicationFields(rawName, rawDose);
   if (!cleanName || cleanName.length < 2) return;
   try {
     const list = getMedicationPresets();
@@ -90,8 +122,8 @@ export function saveMedicationPreset(name: string, dose?: string | null, time?: 
     list.forEach((p) => map.set(p.name.toLowerCase(), p));
     map.set(cleanName.toLowerCase(), {
       name: cleanName,
-      dose: (dose || '').trim() || null,
-      time: (time || '').trim() || null,
+      dose: cleanDose || null,
+      time: (rawTime || '').trim() || null,
     });
     localStorage.setItem('mewwmory_medication_presets', JSON.stringify(Array.from(map.values())));
   } catch (e) {
@@ -512,15 +544,18 @@ export function useDailyEntry(dateStr: string) {
       await supabase.from('medications').delete().eq('daily_entry_id', savedId);
 
       if (validMeds.length > 0) {
-        const medRows = validMeds.map((m, idx) => ({
-          daily_entry_id: savedId,
-          user_id: user.id,
-          sort_order: idx,
-          name: (m.name || '').trim(),
-          dose: m.dose || null,
-          time: m.time || null,
-          taken: m.taken ?? false,
-        }));
+        const medRows = validMeds.map((m, idx) => {
+          const { name: cleanName, dose: cleanDose } = parseMedicationFields(m.name || '', m.dose);
+          return {
+            daily_entry_id: savedId,
+            user_id: user.id,
+            sort_order: idx,
+            name: cleanName,
+            dose: cleanDose,
+            time: m.time || null,
+            taken: m.taken ?? false,
+          };
+        });
         const { data: medData } = await supabase
           .from('medications')
           .insert(medRows)

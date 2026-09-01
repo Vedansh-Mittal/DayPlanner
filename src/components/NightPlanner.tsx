@@ -7,7 +7,7 @@ import {
   MEAL_TYPES, WIND_DOWN_TYPES,
   type DailyEntry, type Medication, type Meal, type WindDownItem,
 } from '../types/database';
-import { getMedicationPresets, deleteMedicationPreset } from '../hooks/useDailyEntry';
+import { getMedicationPresets, deleteMedicationPreset, parseMedicationFields } from '../hooks/useDailyEntry';
 import {
   Moon, Pill, UtensilsCrossed, Heart, Trophy,
   ThumbsUp, Lightbulb, Brain, Star, Plus, Trash2, Shield, Sparkles, X,
@@ -37,8 +37,23 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
   updateMeal, updateWindDown, flushSave,
   disabled = false, lockedReason,
 }) => {
+  const [gratitude1, setGratitude1] = useState(entry?.night_gratitude_1 || '');
+  const [gratitude2, setGratitude2] = useState(entry?.night_gratitude_2 || '');
+  const [gratitude3, setGratitude3] = useState(entry?.night_gratitude_3 || '');
+
   const [presetRefreshKey, setPresetRefreshKey] = useState(0);
   const waterCount = entry?.water_count || 0;
+
+  const handleNameBlur = (medId: string, rawName: string, currentDose?: string | null) => {
+    const { name: cleanName, dose: cleanDose } = parseMedicationFields(rawName, currentDose);
+    if (cleanName !== rawName) {
+      updateMedication(medId, 'name', cleanName);
+    }
+    if (cleanDose && cleanDose !== currentDose) {
+      updateMedication(medId, 'dose', cleanDose);
+    }
+    flushSave();
+  };
 
   const presets = getMedicationPresets();
   const activeMedNames = new Set(medications.map((m) => (m.name || '').trim().toLowerCase()));
@@ -149,7 +164,7 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
                     placeholder="e.g., Vitamin D, Aspirin"
                     value={med.name || ''}
                     onChange={(e) => updateMedication(med.id, 'name', e.target.value)}
-                    onBlur={flushSave}
+                    onBlur={() => handleNameBlur(med.id, med.name || '', med.dose)}
                     disabled={disabled}
                   />
                 </div>

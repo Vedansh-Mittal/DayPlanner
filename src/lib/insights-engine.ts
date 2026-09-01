@@ -16,7 +16,7 @@ export const SYSTEM_PROMPT = `You are the private, compassionate journaling comp
 You will be given:
 - A date range for the entries.
 - Pre-computed statistics (averages, counts).
-- Raw entry text: notes, brain dumps, priorities, gratitude, wins, meals, water, and reflections.
+- Raw entry text: notes, brain dumps, priorities, gratitude, wins, meals, water, medications/supplements, and reflections.
 - Their question.
 
 VOICE & TONE:
@@ -28,6 +28,7 @@ FORMATTING GUIDELINES:
 - Put any quoted phrases or specific words from the user in quotes, e.g. "tired", "feeling overwhelmed", "good progress".
 - Break explanations into short, readable paragraphs (2-3 sentences each). If explaining multiple factors, use bullet points so it is effortless to read on mobile.
 - Connect the dots between what they thought, did, ate, drank, and felt without jumping to clinical conclusions.
+- If the user asks about a medication, supplement, vitamin, or dosage (e.g. "my vitamin D dosage on 2nd august"), locate that medication from the Medications & Supplements section for that date, and clearly state the medication name, dose, scheduled time, and whether it was marked taken.
 - Keep it concise, focused, and deeply grounding (160–240 words).`;
 
 /* ===== Main query handler ===== */
@@ -38,10 +39,10 @@ export async function queryInsights(
 ): Promise<InsightResponse> {
   const range = parseDateRange(question);
 
-  // Fetch entries in range with all relations
+  // Fetch entries in range with all relations including medications
   const { data, error } = await supabase
     .from('daily_entries')
-    .select('*, priorities(*), action_steps(*), meals(*), wind_down_items(*)')
+    .select('*, priorities(*), action_steps(*), medications(*), meals(*), wind_down_items(*)')
     .eq('user_id', userId)
     .gte('entry_date', range.start)
     .lte('entry_date', range.end)
@@ -56,7 +57,7 @@ export async function queryInsights(
     };
   }
 
-  const entries = (data || []) as (DailyEntry & { priorities: any[]; action_steps: any[]; meals: any[]; wind_down_items: any[] })[];
+  const entries = (data || []) as (DailyEntry & { priorities: any[]; action_steps: any[]; medications: any[]; meals: any[]; wind_down_items: any[] })[];
 
   if (entries.length === 0) {
     return {
@@ -142,6 +143,13 @@ async function callGeminiDirect(
       const mList = e.meals.map((m: any) => `${m.meal_type}: ${m.ate ? (m.time ? `Ate at ${m.time}` : 'Ate') : 'Skipped'}${m.notes ? ` (${m.notes})` : ''}`);
       parts.push(`Meals: ${mList.join('; ')}`);
     }
+    if (Array.isArray(e.medications) && e.medications.length) {
+      const medList = e.medications
+        .filter((m: any) => m && m.name?.trim())
+        .map((m: any) => `${m.name}${m.dose ? ` (${m.dose})` : ''}${m.time ? ` at ${m.time}` : ''} [${m.taken ? 'Taken' : 'Not taken'}]`);
+      if (medList.length) parts.push(`Medications & Supplements: ${medList.join('; ')}`);
+    }
+    if (e.medication_notes) parts.push(`Medication Notes: ${e.medication_notes}`);
     if (e.night_mood) parts.push(`Night Mood: ${e.night_mood} (Intensity: ${e.night_mood_intensity || 'N/A'})`);
     const gratitudes = [e.night_gratitude_1, e.night_gratitude_2, e.night_gratitude_3].filter(Boolean);
     if (gratitudes.length) parts.push(`Grateful For: ${gratitudes.join('; ')}`);
@@ -303,13 +311,80 @@ function analyzeLocally(
     return analyzeActions(entries, range, stats);
   }
 
-  // 6. "Mood" general
+  // 6. "Medication" / "Supplements" / "Dosage" / "Vitamin"
+  if (q.includes('medication') || q.includes('medicine') || q.includes('dosage') || q.includes('dose') || q.includes('vitamin') || q.includes('supplement') || q.includes('pill') || q.includes('dolo') || q.includes('aspirin')) {
+    return analyzeMedications(entries, range, stats, question);
+  }
+
+  // 7. "Mood" general
   if (q.includes('mood')) {
     return analyzeMoodOverview(entries, range, stats);
   }
 
-  // 7. General Synthesis
+  // 8. General Synthesis
   return analyzeGeneralSynthesis(entries, range, stats);
+}
+
+function analyzeMedications(
+  entries: any[],
+  range: { start: string; end: string },
+  stats: any,
+  question: string,
+): InsightResponse {
+  const q = question.toLowerCase();
+  const allMeds: { date: string; name: string; dose?: string; time?: string; taken: boolean }[] = [];
+
+  for (const e of entries) {
+    if (Array.isArray(e.medications)) {
+      for (const m of e.medications) {
+        if (m && m.name && m.name.trim()) {
+          allMeds.push({
+            date: e.entry_date,
+            name: m.name.trim(),
+            dose: m.dose || undefined,
+            time: m.time || undefined,
+            taken: !!m.taken,
+          });
+        }
+      }
+    }
+  }
+
+  if (allMeds.length === 0) {
+    return {
+      dateRange: range,
+      summary: `I checked your journal for the requested period (${range.start === range.end ? range.start : `${range.start} to ${range.end}`}), but there are no medications or supplements logged for these dates. If you took your supplements, remember you can track them in the Night Planner!`,
+      stats,
+      insufficientData: true,
+    };
+  }
+
+  // Filter if user asked about a specific medicine (e.g. "vitamin d", "dolo")
+  let targetMeds = allMeds;
+  const knownKeywords = ['vitamin d', 'vitamin', 'omega', 'dolo', 'aspirin', 'calcium', 'iron', 'magnesium', 'zinc', 'b-complex'];
+  const matchedKeyword = knownKeywords.find((k) => q.includes(k));
+  if (matchedKeyword) {
+    const filtered = allMeds.filter((m) => m.name.toLowerCase().includes(matchedKeyword));
+    if (filtered.length > 0) targetMeds = filtered;
+  }
+
+  let summary = `💊 **Medication & Supplement Records**\n\n`;
+  if (range.start === range.end) {
+    // Single day query
+    summary += `For **${range.start}**, here is your logged supplement record:\n\n`;
+    targetMeds.forEach((m) => {
+      summary += `• **${m.name}**: ${m.dose ? `Dosage: **${m.dose}**` : 'Dosage: Not specified'}${m.time ? `, Time: ${m.time}` : ''} (${m.taken ? '✅ Taken' : '⏳ Unticked'})\n`;
+    });
+  } else {
+    summary += `Across this period (${range.start} to ${range.end}), here are your logged medications:\n\n`;
+    targetMeds.slice(0, 6).forEach((m) => {
+      summary += `• **${m.date}** — **${m.name}** ${m.dose ? `(${m.dose})` : ''}${m.time ? ` at ${m.time}` : ''}: ${m.taken ? '✅ Taken' : '⏳ Not taken'}\n`;
+    });
+  }
+
+  summary += `\n💡 Consistent tracking helps keep your health routine seamless and aligned with your daily energy.`;
+
+  return { dateRange: range, summary, stats, insufficientData: false };
 }
 
 function analyzeHappinessFactors(entries: any[], range: { start: string; end: string }, stats: any): InsightResponse {
