@@ -135,8 +135,23 @@ export function useDailyEntry(dateStr: string) {
         if (cachedData) {
           setEntryId(cachedData.id || null);
           setEntryFields(extractFields(cachedData));
-          setPriorities(cachedData.priorities || defaultPriorities());
-          setActionSteps(cachedData.action_steps || defaultActions());
+          
+          const cPriorities = (cachedData.priorities as Priority[]) || [];
+          const normalizedCP = [0, 1, 2].map((i) => {
+            const found = cPriorities.find((p) => p.sort_order === i) || cPriorities[i];
+            return found ? { ...found, sort_order: i } : { sort_order: i, text: null, completed: false };
+          });
+          prioritiesRef.current = normalizedCP;
+          setPriorities(normalizedCP);
+
+          const cActions = (cachedData.action_steps as ActionStep[]) || [];
+          const normalizedCA = [0, 1, 2, 3, 4].map((i) => {
+            const found = cActions.find((a) => a.sort_order === i) || cActions[i];
+            return found ? { ...found, sort_order: i } : { sort_order: i, text: null, completed: false };
+          });
+          actionStepsRef.current = normalizedCA;
+          setActionSteps(normalizedCA);
+
           setMedications(cachedData.medications || []);
           setMeals(cachedData.meals || defaultMeals());
           setWindDownItems(cachedData.wind_down_items || defaultWindDown());
@@ -169,16 +184,23 @@ export function useDailyEntry(dateStr: string) {
     if (data) {
       setEntryId(data.id);
       setEntryFields(extractFields(data));
-      setPriorities(
-        (data.priorities as Priority[]).length > 0
-          ? (data.priorities as Priority[]).sort((a, b) => a.sort_order - b.sort_order)
-          : defaultPriorities(),
-      );
-      setActionSteps(
-        (data.action_steps as ActionStep[]).length > 0
-          ? (data.action_steps as ActionStep[]).sort((a, b) => a.sort_order - b.sort_order)
-          : defaultActions(),
-      );
+      
+      const loadedPriorities = ((data.priorities as Priority[]) || []).sort((a, b) => a.sort_order - b.sort_order);
+      const normalizedP = [0, 1, 2].map((i) => {
+        const found = loadedPriorities.find((p) => p.sort_order === i);
+        return found ? { ...found } : { sort_order: i, text: null, completed: false };
+      });
+      prioritiesRef.current = normalizedP;
+      setPriorities(normalizedP);
+
+      const loadedActions = ((data.action_steps as ActionStep[]) || []).sort((a, b) => a.sort_order - b.sort_order);
+      const normalizedA = [0, 1, 2, 3, 4].map((i) => {
+        const found = loadedActions.find((a) => a.sort_order === i);
+        return found ? { ...found } : { sort_order: i, text: null, completed: false };
+      });
+      actionStepsRef.current = normalizedA;
+      setActionSteps(normalizedA);
+
       setMedications(
         (data.medications as Medication[]).sort((a, b) => a.sort_order - b.sort_order),
       );
@@ -196,8 +218,8 @@ export function useDailyEntry(dateStr: string) {
       saveToLocalCache(
         dateStr,
         extractFields(data),
-        data.priorities || [],
-        data.action_steps || [],
+        normalizedP,
+        normalizedA,
         data.meals || [],
         data.wind_down_items || [],
         data.medications || []
@@ -206,8 +228,12 @@ export function useDailyEntry(dateStr: string) {
       // No entry in DB yet -> initialize default fields
       setEntryId(null);
       setEntryFields({ ...DEFAULT_ENTRY_FIELDS });
-      setPriorities(defaultPriorities());
-      setActionSteps(defaultActions());
+      const defP = defaultPriorities();
+      const defA = defaultActions();
+      prioritiesRef.current = defP;
+      actionStepsRef.current = defA;
+      setPriorities(defP);
+      setActionSteps(defA);
       setMedications([]);
       setMeals(defaultMeals());
       setWindDownItems(defaultWindDown());
@@ -315,10 +341,10 @@ export function useDailyEntry(dateStr: string) {
       }));
 
       // 2. Upsert priorities
-      const pRows = prioritiesRef.current.map((p: any) => ({
+      const pRows = prioritiesRef.current.map((p: any, idx: number) => ({
         daily_entry_id: savedId,
         user_id: user.id,
-        sort_order: p.sort_order,
+        sort_order: idx,
         text: p.text || null,
         completed: p.completed ?? false,
       }));
@@ -326,13 +352,21 @@ export function useDailyEntry(dateStr: string) {
         .from('priorities')
         .upsert(pRows, { onConflict: 'daily_entry_id,sort_order' })
         .select();
-      if (pData) setPriorities(pData as Priority[]);
+      if (pData) {
+        const pSorted = (pData as Priority[]).sort((a, b) => a.sort_order - b.sort_order);
+        const pNormalized = [0, 1, 2].map((i) => {
+          const found = pSorted.find((p) => p.sort_order === i);
+          return found ? { ...found } : (prioritiesRef.current[i] || { sort_order: i, text: null, completed: false });
+        });
+        prioritiesRef.current = pNormalized;
+        setPriorities(pNormalized);
+      }
 
       // 3. Upsert action steps
-      const aRows = actionStepsRef.current.map((a: any) => ({
+      const aRows = actionStepsRef.current.map((a: any, idx: number) => ({
         daily_entry_id: savedId,
         user_id: user.id,
-        sort_order: a.sort_order,
+        sort_order: idx,
         text: a.text || null,
         completed: a.completed ?? false,
       }));
@@ -340,7 +374,15 @@ export function useDailyEntry(dateStr: string) {
         .from('action_steps')
         .upsert(aRows, { onConflict: 'daily_entry_id,sort_order' })
         .select();
-      if (aData) setActionSteps(aData as ActionStep[]);
+      if (aData) {
+        const aSorted = (aData as ActionStep[]).sort((a, b) => a.sort_order - b.sort_order);
+        const aNormalized = [0, 1, 2, 3, 4].map((i) => {
+          const found = aSorted.find((a) => a.sort_order === i);
+          return found ? { ...found } : (actionStepsRef.current[i] || { sort_order: i, text: null, completed: false });
+        });
+        actionStepsRef.current = aNormalized;
+        setActionSteps(aNormalized);
+      }
 
       // 4. Upsert meals
       const mRows = mealsRef.current.map((m: any) => ({
@@ -357,7 +399,7 @@ export function useDailyEntry(dateStr: string) {
         .select();
       if (mData) setMeals(mData as Meal[]);
 
-      // 5. Upsert wind-down items
+      // 5. Upsert wind down items
       const wRows = windDownRef.current.map((w: any) => ({
         daily_entry_id: savedId,
         user_id: user.id,
@@ -370,14 +412,22 @@ export function useDailyEntry(dateStr: string) {
         .select();
       if (wData) setWindDownItems(wData as WindDownItem[]);
 
-      // 6. Medications
-      for (const med of medicationsRef.current) {
-        if (med.id) {
-          await supabase.from('medications')
-            .update({ name: med.name, dose: med.dose, time: med.time, taken: med.taken })
-            .eq('id', med.id)
-            .eq('user_id', user.id);
-        }
+      // 6. Sync medications (delete removed, upsert current)
+      if (medicationsRef.current.length > 0) {
+        const medRows = medicationsRef.current.map((m, idx) => ({
+          daily_entry_id: savedId,
+          user_id: user.id,
+          sort_order: idx,
+          name: m.name || null,
+          dose: m.dose || null,
+          time: m.time || null,
+          taken: m.taken ?? false,
+        }));
+        const { data: medData } = await supabase
+          .from('medications')
+          .upsert(medRows)
+          .select();
+        if (medData) setMedications(medData as Medication[]);
       }
 
       setSaveStatus('saved');
@@ -415,16 +465,18 @@ export function useDailyEntry(dateStr: string) {
   }, [scheduleSave]);
 
   const updatePriority = useCallback((index: number, field: keyof Priority, value: any) => {
-    const next = [...prioritiesRef.current];
-    if (next[index]) next[index] = { ...next[index], [field]: value };
+    const current = [...prioritiesRef.current];
+    const next = [0, 1, 2].map((i) => current[i] ? { ...current[i] } : { sort_order: i, text: null, completed: false });
+    next[index] = { ...next[index], [field]: value };
     prioritiesRef.current = next;
     setPriorities(next);
     scheduleSave();
   }, [scheduleSave]);
 
   const updateActionStep = useCallback((index: number, field: keyof ActionStep, value: any) => {
-    const next = [...actionStepsRef.current];
-    if (next[index]) next[index] = { ...next[index], [field]: value };
+    const current = [...actionStepsRef.current];
+    const next = [0, 1, 2, 3, 4].map((i) => current[i] ? { ...current[i] } : { sort_order: i, text: null, completed: false });
+    next[index] = { ...next[index], [field]: value };
     actionStepsRef.current = next;
     setActionSteps(next);
     scheduleSave();
