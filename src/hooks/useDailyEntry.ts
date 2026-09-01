@@ -353,13 +353,12 @@ export function useDailyEntry(dateStr: string) {
         .upsert(pRows, { onConflict: 'daily_entry_id,sort_order' })
         .select();
       if (pData) {
-        const pSorted = (pData as Priority[]).sort((a, b) => a.sort_order - b.sort_order);
-        const pNormalized = [0, 1, 2].map((i) => {
-          const found = pSorted.find((p) => p.sort_order === i);
-          return found ? { ...found } : (prioritiesRef.current[i] || { sort_order: i, text: null, completed: false });
+        pData.forEach((row: any) => {
+          if (prioritiesRef.current[row.sort_order]) {
+            prioritiesRef.current[row.sort_order].id = row.id;
+            prioritiesRef.current[row.sort_order].daily_entry_id = savedId;
+          }
         });
-        prioritiesRef.current = pNormalized;
-        setPriorities(pNormalized);
       }
 
       // 3. Upsert action steps
@@ -375,13 +374,12 @@ export function useDailyEntry(dateStr: string) {
         .upsert(aRows, { onConflict: 'daily_entry_id,sort_order' })
         .select();
       if (aData) {
-        const aSorted = (aData as ActionStep[]).sort((a, b) => a.sort_order - b.sort_order);
-        const aNormalized = [0, 1, 2, 3, 4].map((i) => {
-          const found = aSorted.find((a) => a.sort_order === i);
-          return found ? { ...found } : (actionStepsRef.current[i] || { sort_order: i, text: null, completed: false });
+        aData.forEach((row: any) => {
+          if (actionStepsRef.current[row.sort_order]) {
+            actionStepsRef.current[row.sort_order].id = row.id;
+            actionStepsRef.current[row.sort_order].daily_entry_id = savedId;
+          }
         });
-        actionStepsRef.current = aNormalized;
-        setActionSteps(aNormalized);
       }
 
       // 4. Upsert meals
@@ -397,7 +395,15 @@ export function useDailyEntry(dateStr: string) {
         .from('meals')
         .upsert(mRows, { onConflict: 'daily_entry_id,meal_type' })
         .select();
-      if (mData) setMeals(mData as Meal[]);
+      if (mData) {
+        mData.forEach((row: any) => {
+          const target = mealsRef.current.find((m) => m.meal_type === row.meal_type);
+          if (target) {
+            target.id = row.id;
+            target.daily_entry_id = savedId;
+          }
+        });
+      }
 
       // 5. Upsert wind down items
       const wRows = windDownRef.current.map((w: any) => ({
@@ -410,7 +416,15 @@ export function useDailyEntry(dateStr: string) {
         .from('wind_down_items')
         .upsert(wRows, { onConflict: 'daily_entry_id,item_type' })
         .select();
-      if (wData) setWindDownItems(wData as WindDownItem[]);
+      if (wData) {
+        wData.forEach((row: any) => {
+          const target = windDownRef.current.find((w) => w.item_type === row.item_type);
+          if (target) {
+            target.id = row.id;
+            target.daily_entry_id = savedId;
+          }
+        });
+      }
 
       // 6. Sync medications (delete removed, upsert current)
       if (medicationsRef.current.length > 0) {
@@ -465,20 +479,22 @@ export function useDailyEntry(dateStr: string) {
   }, [scheduleSave]);
 
   const updatePriority = useCallback((index: number, field: keyof Priority, value: any) => {
-    const current = [...prioritiesRef.current];
-    const next = [0, 1, 2].map((i) => current[i] ? { ...current[i] } : { sort_order: i, text: null, completed: false });
-    next[index] = { ...next[index], [field]: value };
-    prioritiesRef.current = next;
-    setPriorities(next);
+    setPriorities((prev) => {
+      const next = [0, 1, 2].map((i) => prev[i] ? { ...prev[i] } : { sort_order: i, text: null, completed: false });
+      next[index] = { ...next[index], [field]: value };
+      prioritiesRef.current = next;
+      return next;
+    });
     scheduleSave();
   }, [scheduleSave]);
 
   const updateActionStep = useCallback((index: number, field: keyof ActionStep, value: any) => {
-    const current = [...actionStepsRef.current];
-    const next = [0, 1, 2, 3, 4].map((i) => current[i] ? { ...current[i] } : { sort_order: i, text: null, completed: false });
-    next[index] = { ...next[index], [field]: value };
-    actionStepsRef.current = next;
-    setActionSteps(next);
+    setActionSteps((prev) => {
+      const next = [0, 1, 2, 3, 4].map((i) => prev[i] ? { ...prev[i] } : { sort_order: i, text: null, completed: false });
+      next[index] = { ...next[index], [field]: value };
+      actionStepsRef.current = next;
+      return next;
+    });
     scheduleSave();
   }, [scheduleSave]);
 
