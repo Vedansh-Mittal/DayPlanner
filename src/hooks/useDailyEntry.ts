@@ -202,7 +202,18 @@ export function useDailyEntry(dateStr: string) {
           actionStepsRef.current = normalizedCA;
           setActionSteps(normalizedCA);
 
-          const cachedMeds = ((cachedData.medications as Medication[]) || []).filter((m) => m && m.name && m.name.trim());
+          const rawCachedMeds = (cachedData.medications as Medication[]) || [];
+          const cSeen = new Set<string>();
+          const cachedMeds: Medication[] = [];
+          rawCachedMeds.forEach((m) => {
+            if (m && m.name && m.name.trim()) {
+              const k = m.name.trim().toLowerCase();
+              if (!cSeen.has(k)) {
+                cSeen.add(k);
+                cachedMeds.push({ ...m, sort_order: cachedMeds.length });
+              }
+            }
+          });
           setMedications(cachedMeds);
           medicationsRef.current = cachedMeds;
 
@@ -254,9 +265,20 @@ export function useDailyEntry(dateStr: string) {
       actionStepsRef.current = normalizedA;
       setActionSteps(normalizedA);
 
-      const loadedMeds = ((data.medications as Medication[]) || [])
+      // Deduplicate loaded medications by name to clean up any past duplicate inserts
+      const rawMeds = (data.medications as Medication[]) || [];
+      const seen = new Set<string>();
+      const loadedMeds: Medication[] = [];
+      rawMeds
         .filter((m) => m && m.name && m.name.trim())
-        .sort((a, b) => a.sort_order - b.sort_order);
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .forEach((m) => {
+          const k = (m.name || '').trim().toLowerCase();
+          if (k && !seen.has(k)) {
+            seen.add(k);
+            loadedMeds.push({ ...m, sort_order: loadedMeds.length });
+          }
+        });
 
       setMedications(loadedMeds);
       medicationsRef.current = loadedMeds;
@@ -484,22 +506,32 @@ export function useDailyEntry(dateStr: string) {
         });
       }
 
-      // 6. Sync medications (delete removed, upsert current)
-      if (medicationsRef.current.length > 0) {
-        const medRows = medicationsRef.current.map((m, idx) => ({
+      // 6. Sync medications: atomic replace for this day's entry
+      const validMeds = medicationsRef.current.filter((m) => m && m.name && m.name.trim().length > 0);
+      
+      await supabase.from('medications').delete().eq('daily_entry_id', savedId);
+
+      if (validMeds.length > 0) {
+        const medRows = validMeds.map((m, idx) => ({
           daily_entry_id: savedId,
           user_id: user.id,
           sort_order: idx,
-          name: m.name || null,
+          name: (m.name || '').trim(),
           dose: m.dose || null,
           time: m.time || null,
           taken: m.taken ?? false,
         }));
         const { data: medData } = await supabase
           .from('medications')
-          .upsert(medRows)
+          .insert(medRows)
           .select();
-        if (medData) setMedications(medData as Medication[]);
+        if (medData) {
+          medicationsRef.current = medData as Medication[];
+          setMedications(medData as Medication[]);
+        }
+      } else {
+        medicationsRef.current = [];
+        setMedications([]);
       }
 
       setSaveStatus('saved');
@@ -611,17 +643,33 @@ export function useDailyEntry(dateStr: string) {
   };
 
   const addMedication = useCallback((preset?: Partial<Medication>) => {
-    const newMed: Medication = {
-      id: `temp_${Date.now()}_${medicationsRef.current.length}`,
-      daily_entry_id: entryIdRef.current || '',
-      user_id: user?.id || '',
-      sort_order: medicationsRef.current.length,
-      name: preset?.name || '',
-      dose: preset?.dose || '',
-      time: preset?.time || '',
-      taken: false,
-    };
     setMedications((prev) => {
+      const presetName = (preset?.name || '').trim();
+      if (presetName) {
+        // If already exists on this day, update its values instead of creating duplicate row
+        const existingIdx = prev.findIndex((m) => (m.name || '').trim().toLowerCase() === presetName.toLowerCase());
+        if (existingIdx >= 0) {
+          const next = [...prev];
+          next[existingIdx] = {
+            ...next[existingIdx],
+            dose: preset?.dose !== undefined ? preset.dose : next[existingIdx].dose,
+            time: preset?.time !== undefined ? preset.time : next[existingIdx].time,
+          };
+          medicationsRef.current = next;
+          return next;
+        }
+      }
+
+      const newMed: Medication = {
+        id: `temp_${Date.now()}_${prev.length}`,
+        daily_entry_id: entryIdRef.current || '',
+        user_id: user?.id || '',
+        sort_order: prev.length,
+        name: presetName,
+        dose: preset?.dose || '',
+        time: preset?.time || '',
+        taken: false,
+      };
       const next = [...prev, newMed];
       medicationsRef.current = next;
       return next;
