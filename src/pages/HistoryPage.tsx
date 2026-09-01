@@ -302,18 +302,32 @@ export const HistoryPage: React.FC = () => {
             const isNightDone = data
               ? data.night_completed || isNightComplete(data, data.meals || [], data.wind_down_items || [])
               : false;
-            const isFullDone = isMorningDone && isNightDone;
+            
+            const isAllFilled = isMorningDone && isNightDone;
 
-            const isPartialDone = data
-              ? !isFullDone && (
-                  isMorningDone ||
-                  isNightDone ||
-                  !!data.daily_note?.trim() ||
-                  isMorningStarted(data, data.priorities || [], data.action_steps || []) ||
-                  isNightStarted(data, data.meals || [], data.wind_down_items || []) ||
-                  (typeof data.water_count === 'number' && data.water_count > 0)
-                )
-              : false;
+            const prioritiesArr = Array.isArray(data?.priorities) ? data.priorities : [];
+            const actionStepsArr = Array.isArray(data?.action_steps) ? data.action_steps : [];
+
+            // Check if all filled priorities and action steps are marked completed
+            const areTasksDone =
+              prioritiesArr.filter((p: any) => p?.text && p.text.trim()).every((p: any) => p.completed) &&
+              actionStepsArr.filter((a: any) => a?.text && a.text.trim()).every((a: any) => a.completed);
+
+            // 1. 🟢 Green: Full Completion (All filled AND all tasks completed)
+            const isFullyCompleted = isAllFilled && areTasksDone;
+
+            // 2. 🟣 Indigo/Lavender: Filled All, but tasks open (Both routines filled, tasks remaining)
+            const isFilledWithOpenTasks = isAllFilled && !areTasksDone;
+
+            // 3. 🟡 Yellow: Not Filled All (Partially logged)
+            const isPartiallyFilled = !isAllFilled && (
+              isMorningDone ||
+              isNightDone ||
+              !!data?.daily_note?.trim() ||
+              isMorningStarted(data, prioritiesArr, actionStepsArr) ||
+              isNightStarted(data, data?.meals || [], data?.wind_down_items || []) ||
+              (typeof data?.water_count === 'number' && data.water_count > 0)
+            );
 
              return (
               <button
@@ -324,15 +338,17 @@ export const HistoryPage: React.FC = () => {
                 title={isFutureDate ? 'Future date locked' : undefined}
                 style={moodColor ? { backgroundColor: `${moodColor}25` } : undefined}
               >
-                {/* Header row: Day Number + Completion Dot (Green / Yellow / Lock) */}
+                {/* Header row: Day Number + 3-Tier Completion Dot (Green / Indigo / Yellow / Lock) */}
                 <div className="flex items-center justify-between w-full gap-0.5">
                   <span className="font-bold text-xs text-text-primary dark:text-dark-text">{format(day, 'd')}</span>
                   {isFutureDate ? (
                     <span className="text-[10px] opacity-60 shrink-0">🔒</span>
-                  ) : isFullDone ? (
+                  ) : isFullyCompleted ? (
                     <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500 ring-1 sm:ring-2 ring-emerald-200 dark:ring-emerald-900/40 block shrink-0" title="Fully Completed" />
-                  ) : isPartialDone ? (
-                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-amber-400 ring-1 sm:ring-2 ring-amber-200 dark:ring-amber-900/40 block shrink-0" title="Partially Completed" />
+                  ) : isFilledWithOpenTasks ? (
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-indigo-500 ring-1 sm:ring-2 ring-indigo-200 dark:ring-indigo-900/40 block shrink-0" title="Filled all, open tasks remaining" />
+                  ) : isPartiallyFilled ? (
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-amber-400 ring-1 sm:ring-2 ring-amber-200 dark:ring-amber-900/40 block shrink-0" title="Partially Filled" />
                   ) : null}
                 </div>
 
@@ -350,12 +366,15 @@ export const HistoryPage: React.FC = () => {
         </div>
 
         {/* Legend */}
-        <div className="flex justify-center gap-6 mt-4 text-xs font-medium text-text-muted dark:text-dark-text-muted">
+        <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 mt-4 text-xs font-medium text-text-muted dark:text-dark-text-muted">
           <span className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Fully Completed
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" /> Fully Completed
           </span>
           <span className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Partially Left
+            <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0" /> Filled All (Tasks Open)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0" /> Partially Filled
           </span>
           <span className="flex items-center gap-1.5">
             <span className="text-xs opacity-60">🔒</span> Future Date Locked
