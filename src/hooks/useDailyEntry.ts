@@ -772,6 +772,78 @@ export function useDailyEntry(dateStr: string) {
     scheduleSave();
   }, [scheduleSave]);
 
+  const clearEntireDay = useCallback(async () => {
+    if (!user) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    savingRef.current = false;
+    dirtyRef.current = false;
+
+    setLoading(true);
+
+    try {
+      // 1. Delete from database if saved
+      if (entryIdRef.current) {
+        await Promise.all([
+          supabase.from('priorities').delete().eq('daily_entry_id', entryIdRef.current),
+          supabase.from('action_steps').delete().eq('daily_entry_id', entryIdRef.current),
+          supabase.from('medications').delete().eq('daily_entry_id', entryIdRef.current),
+          supabase.from('meals').delete().eq('daily_entry_id', entryIdRef.current),
+          supabase.from('wind_down_items').delete().eq('daily_entry_id', entryIdRef.current),
+        ]);
+        await supabase.from('daily_entries').delete().eq('id', entryIdRef.current);
+      } else {
+        await supabase.from('daily_entries').delete().eq('user_id', user.id).eq('entry_date', dateStr);
+      }
+
+      // 2. Remove from local offline cache
+      try {
+        const raw = localStorage.getItem('daylight_offline_cache');
+        if (raw) {
+          const cache = JSON.parse(raw);
+          delete cache[dateStr];
+          localStorage.setItem('daylight_offline_cache', JSON.stringify(cache));
+        }
+      } catch (e) {
+        console.error('Error clearing local cache for date:', e);
+      }
+
+      // 3. Reset all React state and Refs
+      setEntryId(null);
+      entryIdRef.current = null;
+
+      const defFields = { ...DEFAULT_ENTRY_FIELDS };
+      const defP = defaultPriorities();
+      const defA = defaultActions();
+      const defM = defaultMeals();
+      const defW = defaultWindDown();
+
+      setEntryFields(defFields);
+      entryFieldsRef.current = defFields;
+
+      setPriorities(defP);
+      prioritiesRef.current = defP;
+
+      setActionSteps(defA);
+      actionStepsRef.current = defA;
+
+      setMedications([]);
+      medicationsRef.current = [];
+
+      setMeals(defM);
+      mealsRef.current = defM;
+
+      setWindDownItems(defW);
+      windDownRef.current = defW;
+
+      setSaveStatus('saved');
+    } catch (err: any) {
+      console.error('Error clearing entire day:', err);
+      setError(err.message || 'Failed to clear day');
+    } finally {
+      setLoading(false);
+    }
+  }, [user, dateStr]);
+
   /* ——— Build the entry object for consumers ——— */
   const entry: DailyEntry | null = loading ? null : {
     id: entryId || '',
@@ -788,6 +860,7 @@ export function useDailyEntry(dateStr: string) {
     updateField, updatePriority, updateActionStep,
     updateMeal, updateWindDown,
     addMedication, removeMedication, clearAllMedications, updateMedication,
+    clearEntireDay,
     flushSave,
   };
 }

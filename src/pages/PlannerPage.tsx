@@ -8,7 +8,7 @@ import { MorningPlanner } from '../components/MorningPlanner';
 import { NightPlanner } from '../components/NightPlanner';
 import { useMoodBackground } from '../hooks/useMoodBackground';
 import { formatFriendlyDate, getTodayStr, isMorningComplete, isMorningStarted, isNightComplete, isNightStarted } from '../lib/utils';
-import { ChevronLeft, ChevronRight, CalendarDays, Sun, Moon, StickyNote } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarDays, Sun, Moon, StickyNote, RotateCcw, Trash2, AlertTriangle, X } from 'lucide-react';
 
 import { getWaterGoalForDate } from '../lib/water-goal-history';
 
@@ -26,6 +26,8 @@ export const PlannerPage: React.FC = () => {
   const dateParam = searchParams.get('date');
   const [dateStr, setDateStr] = useState(() => getInitialDate(dateParam));
   const [activeTab, setActiveTab] = useState<'morning' | 'night'>('morning');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const { settings } = useUserSettings();
   const waterGoal = getWaterGoalForDate(dateStr, settings?.water_goal || 8);
 
@@ -43,6 +45,7 @@ export const PlannerPage: React.FC = () => {
     updateField, updatePriority, updateActionStep,
     updateMeal, updateWindDown,
     addMedication, removeMedication, clearAllMedications, updateMedication,
+    clearEntireDay,
     flushSave,
   } = useDailyEntry(dateStr);
 
@@ -276,6 +279,75 @@ export const PlannerPage: React.FC = () => {
           />
         )}
       </div>
+
+      {/* Clear Day Action */}
+      {!isFuture && (
+        <div className="flex justify-center pt-2 pb-8">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-xs text-text-muted hover:text-red-500 font-medium px-3.5 py-2 rounded-2xl hover:bg-red-50/80 dark:hover:bg-red-950/20 transition-all border border-border/40 hover:border-red-200 dark:border-dark-border/40 shadow-xs"
+            onClick={() => setShowResetConfirm(true)}
+            title="Reset and clear all logs for this day"
+          >
+            <RotateCcw size={13} />
+            <span>Reset & clear this day</span>
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fade-in">
+          <div 
+            className="bg-white dark:bg-dark-card border border-border/80 dark:border-dark-border rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-scale-up"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-text-primary dark:text-dark-text">
+                  Reset this day?
+                </h3>
+                <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                  {formatFriendlyDate(dateStr)}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-text-secondary dark:text-dark-text-muted leading-relaxed">
+              This will permanently delete all morning intentions, priorities, action steps, meal records, and medication logs for this day.
+            </p>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                className="btn-ghost flex-1 text-xs py-2.5"
+                onClick={() => setShowResetConfirm(false)}
+                disabled={isClearing}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-2.5 px-3 rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5"
+                onClick={async () => {
+                  setIsClearing(true);
+                  await clearEntireDay();
+                  setIsClearing(false);
+                  setShowResetConfirm(false);
+                }}
+                disabled={isClearing}
+              >
+                <Trash2 size={14} />
+                <span>{isClearing ? 'Clearing...' : 'Clear Day'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
