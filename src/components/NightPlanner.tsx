@@ -7,9 +7,10 @@ import {
   MEAL_TYPES, WIND_DOWN_TYPES,
   type DailyEntry, type Medication, type Meal, type WindDownItem,
 } from '../types/database';
+import { getSavedMedicationList } from '../hooks/useDailyEntry';
 import {
   Moon, Pill, UtensilsCrossed, Heart, Trophy,
-  ThumbsUp, Lightbulb, Brain, Star, Plus, Trash2, Shield,
+  ThumbsUp, Lightbulb, Brain, Star, Plus, Trash2, Shield, Sparkles,
 } from 'lucide-react';
 
 interface NightPlannerProps {
@@ -20,7 +21,7 @@ interface NightPlannerProps {
   waterGoal: number;
   updateField: (field: keyof DailyEntry, value: any) => void;
   updateMedication: (id: string, field: keyof Medication, value: any) => void;
-  addMedication: () => void;
+  addMedication: (initial?: Partial<Medication>) => void;
   removeMedication: (id: string) => void;
   updateMeal: (mealType: string, field: keyof Meal, value: any) => void;
   updateWindDown: (itemType: string, completed: boolean) => void;
@@ -202,14 +203,50 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
           </div>
         )}
 
-        <button
-          type="button"
-          className="btn-ghost text-sm"
-          onClick={addMedication}
-        >
-          <Plus size={16} />
-          Add medication
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn-ghost text-sm"
+            onClick={() => addMedication()}
+            disabled={disabled}
+          >
+            <Plus size={16} />
+            Add medication
+          </button>
+        </div>
+
+        {/* Quick Add from Saved Medications */}
+        {(() => {
+          const savedList = getSavedMedicationList();
+          const activeNames = new Set(medications.map((m) => (m.name || '').trim().toLowerCase()));
+          const available = savedList.filter((sm) => sm.name && !activeNames.has(sm.name.toLowerCase()));
+          if (available.length === 0) return null;
+
+          return (
+            <div className="mt-3 pt-3 border-t border-border/40 dark:border-dark-border/40">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-2">
+                <Sparkles size={13} className="text-lavender-dark dark:text-lavender" />
+                <span>Saved Medications (Click to Quick Add)</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {available.map((sm) => (
+                  <button
+                    key={sm.name}
+                    type="button"
+                    className="text-xs px-3 py-1 rounded-full bg-lavender/15 hover:bg-lavender/25 dark:bg-dark-card text-text-primary dark:text-dark-text border border-lavender/30 hover:border-lavender flex items-center gap-1.5 transition-all tap-spring shadow-xs"
+                    onClick={() => addMedication({ name: sm.name, dose: sm.dose || '', time: sm.time || '', taken: false })}
+                    disabled={disabled}
+                    title="Click to add to today's tracker"
+                  >
+                    <Plus size={12} className="text-lavender-dark dark:text-lavender" />
+                    <span className="font-semibold">{sm.name}</span>
+                    {sm.dose && <span className="opacity-70 text-[10px]">({sm.dose})</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Side effects / notes */}
         <div className="mt-4">
