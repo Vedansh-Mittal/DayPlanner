@@ -36,11 +36,11 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8 fade-in">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-lavender to-blue-soft flex items-center justify-center mb-4 shadow-lg">
-            <Sun size={32} className="text-white" />
+          <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-xl ring-4 ring-lavender/40 flex items-center justify-center mb-4">
+            <img src="/mewwmory-icon.png" alt="Mewwmory" className="w-full h-full object-cover" />
           </div>
-          <h1 className="text-3xl font-extrabold text-text-primary dark:text-dark-text">
-            Daylight Planner
+          <h1 className="text-3xl font-extrabold text-text-primary dark:text-dark-text tracking-tight">
+            Mewwmory
           </h1>
           <p className="text-text-secondary dark:text-dark-text-secondary mt-2 text-center">
             A calm, private space for your daily reflections.

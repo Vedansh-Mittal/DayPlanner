@@ -52,10 +52,10 @@ export const OnboardingPage: React.FC = () => {
     // Step 0: Welcome + name
     <div key="name" className="space-y-6 fade-in">
       <div className="text-center">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-lavender to-blue-soft flex items-center justify-center mx-auto mb-4 shadow-lg">
-          <Sun size={32} className="text-white" />
+        <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-xl ring-4 ring-lavender/40 flex items-center justify-center mx-auto mb-4">
+          <img src="/mewwmory-icon.png" alt="Mewwmory" className="w-full h-full object-cover" />
         </div>
-        <h2 className="text-2xl font-extrabold">Welcome to Daylight! ☀️</h2>
+        <h2 className="text-2xl font-extrabold tracking-tight">Welcome to Mewwmory! 🐾</h2>
         <p className="text-text-secondary dark:text-dark-text-secondary mt-2">
           Let's set up your planner in just a few steps.
         </p>

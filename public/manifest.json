@@ -1,16 +1,16 @@
 {
-  "short_name": "Daylight",
-  "name": "Daylight Planner",
+  "short_name": "Mewwmory",
+  "name": "Mewwmory",
   "description": "A calm, private daily planner for morning and evening reflections, mood tracking, and personal insights.",
   "start_url": "/",
-  "background_color": "#121214",
-  "theme_color": "#818cf8",
+  "background_color": "#FFF8F0",
+  "theme_color": "#C4B5E0",
   "display": "standalone",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "icon.svg",
-      "type": "image/svg+xml",
+      "src": "mewwmory-icon.png",
+      "type": "image/png",
       "sizes": "any"
     }
   ]

@@ -123,10 +123,10 @@ export async function subscribeToPush(userId: string): Promise<boolean> {
 
     // 8. Show local welcome notification
     try {
-      await registration.showNotification('Daylight Planner', {
-        body: 'Thanks for subscribing to push notifications! 🔔',
-        icon: '/icon.svg',
-        badge: '/icon.svg',
+      await registration.showNotification('Mewwmory', {
+        body: 'Thanks for subscribing to push notifications! 🔔🐾',
+        icon: '/mewwmory-icon.png',
+        badge: '/mewwmory-icon.png',
         vibrate: [100, 50, 100],
       } as any);
     } catch (e) {

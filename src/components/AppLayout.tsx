@@ -95,8 +95,8 @@ export const AppLayout: React.FC = () => {
         <div className="max-w-md w-full mx-4 text-center splash-fade-in px-6 py-10 rounded-[32px] border border-border/40 dark:border-dark-border/40 bg-surface/60 dark:bg-dark-surface/40 backdrop-blur-xl shadow-2xl relative">
           {/* Logo / Icon */}
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 rounded-full bg-lavender/20 dark:bg-lavender/10 flex items-center justify-center text-3xl animate-pulse">
-              🌸
+            <div className="w-20 h-20 rounded-full overflow-hidden shadow-xl ring-4 ring-lavender/40 flex items-center justify-center animate-pulse">
+              <img src="/mewwmory-icon.png" alt="Mewwmory" className="w-full h-full object-cover" />
             </div>
           </div>
 
@@ -129,10 +129,10 @@ export const AppLayout: React.FC = () => {
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-60 p-4 border-r border-border/70 dark:border-dark-border/70 bg-surface/80 dark:bg-dark-surface/80 backdrop-blur-md">
         {/* Logo */}
-        <div className="flex items-center gap-2 px-3 mb-8">
-          <Sun size={24} className="text-lavender" />
-          <span className="font-extrabold text-lg text-text-primary dark:text-dark-text">
-            Daylight
+        <div className="flex items-center gap-2.5 px-2 mb-8">
+          <img src="/mewwmory-icon.png" alt="Mewwmory" className="w-8 h-8 rounded-full object-cover shadow-sm ring-2 ring-lavender/40 shrink-0" />
+          <span className="font-extrabold text-lg text-text-primary dark:text-dark-text tracking-tight">
+            Mewwmory
           </span>
         </div>
 

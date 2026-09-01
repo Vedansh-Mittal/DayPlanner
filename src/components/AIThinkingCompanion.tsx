@@ -44,7 +44,7 @@ export const AIThinkingCompanion: React.FC = () => {
 
       {/* Companion Status Message */}
       <h3 className="text-base font-extrabold text-text-primary dark:text-dark-text tracking-tight mb-1">
-        Daylight Companion is Reflecting
+        Mewwmory Companion is Reflecting
       </h3>
       <p className="text-xs font-semibold text-lavender-dark dark:text-lavender transition-all duration-500 h-5 italic">
         "{REFLECTION_QUOTES[quoteIdx]}"

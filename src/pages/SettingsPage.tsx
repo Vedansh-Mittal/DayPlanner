@@ -170,7 +170,7 @@ export const SettingsPage: React.FC = () => {
         printWindow.document.write(`
           <html>
             <head>
-              <title>Daylight Planner Journal Digest</title>
+              <title>Mewwmory Journal Digest</title>
               <style>
                 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap');
                 body { font-family: 'Nunito', sans-serif; padding: 2.5rem; color: #2d3748; background-color: #ffffff; }
@@ -191,7 +191,7 @@ export const SettingsPage: React.FC = () => {
               </style>
             </head>
             <body>
-              <h1>Daylight Planner</h1>
+              <h1>Mewwmory</h1>
               <div class="subtitle">Personal Journal Digest • Generated on ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
               ${entries.map(e => {
           const datePretty = new Date(e.entry_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -523,8 +523,8 @@ export const SettingsPage: React.FC = () => {
             <button
               key={t.value}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition-all ${themePref === t.value
-                  ? 'border-lavender bg-lavender-light dark:bg-lavender-dark/20 text-lavender-dark dark:text-lavender'
-                  : 'border-border dark:border-dark-border text-text-secondary dark:text-dark-text-secondary hover:border-lavender/50'
+                ? 'border-lavender bg-lavender-light dark:bg-lavender-dark/20 text-lavender-dark dark:text-lavender'
+                : 'border-border dark:border-dark-border text-text-secondary dark:text-dark-text-secondary hover:border-lavender/50'
                 }`}
               onClick={() => handleThemeChange(t.value)}
             >
@@ -569,7 +569,7 @@ export const SettingsPage: React.FC = () => {
           Backup & Export Data
         </h2>
         <p className="text-sm text-text-secondary dark:text-dark-text-secondary">
-          Your Daylight Planner database is safe! Supabase operates on robust storage with automatic daily backups.
+          Your Mewwmory database is safe! Supabase operates on robust storage with automatic daily backups.
           Additionally, you can download copy backups of your data below to keep them locally, or restore a backup.
         </p>
 
