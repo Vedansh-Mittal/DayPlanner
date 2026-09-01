@@ -201,9 +201,46 @@ export function useDailyEntry(dateStr: string) {
       actionStepsRef.current = normalizedA;
       setActionSteps(normalizedA);
 
-      setMedications(
-        (data.medications as Medication[]).sort((a, b) => a.sort_order - b.sort_order),
-      );
+      // If no medications logged for this date yet, auto-carry forward user's recent medications
+      let loadedMeds = ((data.medications as Medication[]) || []).sort((a, b) => a.sort_order - b.sort_order);
+      if (loadedMeds.length === 0) {
+        try {
+          const { data: recentMeds } = await supabase
+            .from('medications')
+            .select('name, dose, time, sort_order')
+            .eq('user_id', user.id)
+            .not('name', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+          if (recentMeds && recentMeds.length > 0) {
+            const seen = new Set<string>();
+            loadedMeds = [];
+            recentMeds.forEach((m: any, idx: number) => {
+              const trimmed = (m.name || '').trim();
+              if (trimmed && !seen.has(trimmed.toLowerCase())) {
+                seen.add(trimmed.toLowerCase());
+                loadedMeds.push({
+                  id: `temp_${Date.now()}_${idx}`,
+                  daily_entry_id: data?.id || '',
+                  user_id: user.id,
+                  sort_order: idx,
+                  name: m.name,
+                  dose: m.dose || null,
+                  time: m.time || null,
+                  taken: false, // Ready to tick for today!
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Could not auto-fetch previous medications:', e);
+        }
+      }
+
+      setMedications(loadedMeds);
+      medicationsRef.current = loadedMeds;
+
       setMeals(
         (data.meals as Meal[]).length > 0
           ? (data.meals as Meal[])
@@ -222,10 +259,10 @@ export function useDailyEntry(dateStr: string) {
         normalizedA,
         data.meals || [],
         data.wind_down_items || [],
-        data.medications || []
+        loadedMeds
       );
     } else {
-      // No entry in DB yet -> initialize default fields
+      // No entry in DB yet -> initialize default fields and auto-carry forward previous medications
       setEntryId(null);
       setEntryFields({ ...DEFAULT_ENTRY_FIELDS });
       const defP = defaultPriorities();
@@ -234,7 +271,42 @@ export function useDailyEntry(dateStr: string) {
       actionStepsRef.current = defA;
       setPriorities(defP);
       setActionSteps(defA);
-      setMedications([]);
+      
+      let carriedMeds: Medication[] = [];
+      try {
+        const { data: recentMeds } = await supabase
+          .from('medications')
+          .select('name, dose, time, sort_order')
+          .eq('user_id', user.id)
+          .not('name', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (recentMeds && recentMeds.length > 0) {
+          const seen = new Set<string>();
+          recentMeds.forEach((m: any, idx: number) => {
+            const trimmed = (m.name || '').trim();
+            if (trimmed && !seen.has(trimmed.toLowerCase())) {
+              seen.add(trimmed.toLowerCase());
+              carriedMeds.push({
+                id: `temp_${Date.now()}_${idx}`,
+                daily_entry_id: '',
+                user_id: user.id,
+                sort_order: idx,
+                name: m.name,
+                dose: m.dose || null,
+                time: m.time || null,
+                taken: false,
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Could not auto-fetch previous medications for empty day:', e);
+      }
+      setMedications(carriedMeds);
+      medicationsRef.current = carriedMeds;
+
       setMeals(defaultMeals());
       setWindDownItems(defaultWindDown());
     }
@@ -552,44 +624,48 @@ export function useDailyEntry(dateStr: string) {
     return data.id;
   };
 
-  const addMedication = useCallback(async () => {
-    if (!user) return;
-    const eid = await ensureEntryPersisted();
-    if (!eid) return;
-
-    const newMed = {
-      daily_entry_id: eid,
-      user_id: user.id,
+  const addMedication = useCallback(() => {
+    const newMed: Medication = {
+      id: `temp_${Date.now()}_${medicationsRef.current.length}`,
+      daily_entry_id: entryIdRef.current || '',
+      user_id: user?.id || '',
       sort_order: medicationsRef.current.length,
-      name: null,
-      dose: null,
-      time: null,
+      name: '',
+      dose: '',
+      time: '',
       taken: false,
     };
-
-    const { data, error: err } = await supabase
-      .from('medications')
-      .insert(newMed)
-      .select()
-      .single();
-
-    if (err) {
-      console.error('Add medication error:', err);
-      return;
-    }
-    setMedications((prev) => [...prev, data as Medication]);
-  }, [user, dateStr]);
+    setMedications((prev) => {
+      const next = [...prev, newMed];
+      medicationsRef.current = next;
+      return next;
+    });
+    scheduleSave();
+  }, [user, scheduleSave]);
 
   const removeMedication = useCallback(async (id: string) => {
     if (!user) return;
-    await supabase.from('medications').delete().eq('id', id).eq('user_id', user.id);
-    setMedications((prev) => prev.filter((m) => m.id !== id));
-  }, [user]);
+    if (!id.startsWith('temp_')) {
+      try {
+        await supabase.from('medications').delete().eq('id', id).eq('user_id', user.id);
+      } catch (e) {
+        console.warn('Remove medication warning:', e);
+      }
+    }
+    setMedications((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      medicationsRef.current = next;
+      return next;
+    });
+    scheduleSave();
+  }, [user, scheduleSave]);
 
   const updateMedication = useCallback((id: string, field: keyof Medication, value: any) => {
-    setMedications((prev) =>
-      prev.map((m) => m.id === id ? { ...m, [field]: value } : m),
-    );
+    setMedications((prev) => {
+      const next = prev.map((m) => m.id === id ? { ...m, [field]: value } : m);
+      medicationsRef.current = next;
+      return next;
+    });
     scheduleSave();
   }, [scheduleSave]);
 

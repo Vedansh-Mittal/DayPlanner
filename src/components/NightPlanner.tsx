@@ -114,73 +114,88 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
         {medications.length > 0 && (
           <div className="space-y-3 mb-3">
             {/* Header - Desktop only */}
-            <div className="hidden md:grid md:grid-cols-[1fr_80px_80px_48px_32px] gap-2 text-xs font-bold text-text-muted dark:text-dark-text-muted px-1">
+            <div className="hidden md:grid md:grid-cols-[1fr_100px_95px_56px_36px] gap-2.5 text-xs font-bold text-text-muted dark:text-dark-text-muted px-1 items-center">
               <span>Medication</span>
               <span>Dose</span>
               <span>Time</span>
-              <span>Taken</span>
+              <span className="text-center">Taken</span>
               <span></span>
             </div>
+
             {medications.map((med) => (
               <div 
                 key={med.id} 
-                className="flex flex-col md:grid md:grid-cols-[1fr_80px_80px_48px_32px] gap-2 p-3 md:p-0 bg-cream/30 dark:bg-dark-bg/20 md:bg-transparent dark:md:bg-transparent rounded-xl md:rounded-none border border-border/40 dark:border-dark-border/40 md:border-0 items-stretch md:items-center"
+                className="p-3 md:p-0 bg-cream/30 dark:bg-dark-bg/20 md:bg-transparent dark:md:bg-transparent rounded-2xl md:rounded-none border border-border/40 dark:border-dark-border/40 md:border-0 flex flex-col md:grid md:grid-cols-[1fr_100px_95px_56px_36px] gap-2.5 items-stretch md:items-center"
               >
-                {/* Mobile top row: Checkbox + Name + Trash */}
-                <div className="flex items-center gap-2 w-full md:contents">
-                  <TactileCheckbox
-                    checked={med.taken}
-                    onChange={(checked) => updateMedication(med.id, 'taken', checked)}
-                    disabled={disabled}
-                    ariaLabel={`${med.name || 'Medication'} taken`}
-                  />
+                {/* Col 1: Name */}
+                <div className="flex-1">
+                  <span className="text-[11px] font-bold text-text-muted md:hidden block mb-1">Medication</span>
                   <input
                     type="text"
-                    className="input-field text-sm py-1.5 flex-1 md:w-auto"
-                    placeholder="Name"
+                    className="input-field text-sm w-full"
+                    placeholder="e.g., Vitamin D, Aspirin"
                     value={med.name || ''}
                     onChange={(e) => updateMedication(med.id, 'name', e.target.value)}
                     onBlur={flushSave}
+                    disabled={disabled}
                   />
-                  <button
-                    type="button"
-                    className="text-text-muted hover:text-red-400 transition-colors p-1.5 md:hidden"
-                    onClick={() => removeMedication(med.id)}
-                    aria-label="Remove medication"
-                  >
-                    <Trash2 size={16} />
-                  </button>
                 </div>
 
-                {/* Mobile bottom row: Dose + Time + Desktop Trash */}
-                <div className="flex flex-row md:contents gap-2 mt-1 md:mt-0 items-center">
-                  <input
-                    type="text"
-                    className="input-field text-xs py-1.5 md:text-sm flex-1 md:w-auto"
-                    placeholder="Dose"
-                    value={med.dose || ''}
-                    onChange={(e) => updateMedication(med.id, 'dose', e.target.value)}
-                    onBlur={flushSave}
-                  />
-                  <input
-                    type="time"
-                    className="input-field text-xs py-1 px-1.5 md:text-sm md:py-1.5 w-[90px] md:w-auto shrink-0"
-                    value={med.time || ''}
-                    onChange={(e) => updateMedication(med.id, 'time', e.target.value)}
-                    onBlur={flushSave}
-                  />
-                  {/* Desktop Taken Checkbox placeholder (for grid column alignment on desktop) */}
-                  <div className="hidden md:flex justify-center">
-                    {/* Handled by top row on mobile */}
+                {/* Mobile Bottom Row / Desktop Cols 2, 3, 4, 5 */}
+                <div className="flex items-center gap-2 md:contents">
+                  {/* Col 2: Dose */}
+                  <div className="flex-1 md:w-auto">
+                    <span className="text-[11px] font-bold text-text-muted md:hidden block mb-1">Dose</span>
+                    <input
+                      type="text"
+                      className="input-field text-xs md:text-sm w-full"
+                      placeholder="e.g., 1000 IU"
+                      value={med.dose || ''}
+                      onChange={(e) => updateMedication(med.id, 'dose', e.target.value)}
+                      onBlur={flushSave}
+                      disabled={disabled}
+                    />
                   </div>
-                  <button
-                    type="button"
-                    className="hidden md:block text-text-muted hover:text-red-400 transition-colors"
-                    onClick={() => removeMedication(med.id)}
-                    aria-label="Remove medication"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+
+                  {/* Col 3: Time */}
+                  <div className="w-[85px] md:w-auto shrink-0">
+                    <span className="text-[11px] font-bold text-text-muted md:hidden block mb-1">Time</span>
+                    <input
+                      type="time"
+                      className="input-field text-xs md:text-sm px-2 w-full"
+                      value={med.time || ''}
+                      onChange={(e) => updateMedication(med.id, 'time', e.target.value)}
+                      onBlur={flushSave}
+                      disabled={disabled}
+                    />
+                  </div>
+
+                  {/* Col 4: Taken Checkbox */}
+                  <div className="flex flex-col items-center justify-center shrink-0 md:w-full">
+                    <span className="text-[11px] font-bold text-text-muted md:hidden block mb-1">Taken</span>
+                    <div className="flex items-center justify-center h-[38px]">
+                      <TactileCheckbox
+                        checked={med.taken}
+                        onChange={(checked) => updateMedication(med.id, 'taken', checked)}
+                        disabled={disabled}
+                        ariaLabel={`${med.name || 'Medication'} taken`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Col 5: Trash */}
+                  <div className="flex items-center justify-center shrink-0 md:w-auto">
+                    <span className="text-[11px] md:hidden block mb-1 opacity-0">.</span>
+                    <button
+                      type="button"
+                      className="text-text-muted hover:text-red-500 transition-colors p-2 h-[38px] flex items-center justify-center rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20"
+                      onClick={() => removeMedication(med.id)}
+                      disabled={disabled}
+                      aria-label="Remove medication"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
