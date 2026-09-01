@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MoodSelector } from './MoodSelector';
 import { FluidWaterTracker } from './FluidWaterTracker';
 import { HabitRingTarget } from './HabitRingTarget';
@@ -7,10 +7,10 @@ import {
   MEAL_TYPES, WIND_DOWN_TYPES,
   type DailyEntry, type Medication, type Meal, type WindDownItem,
 } from '../types/database';
-import { getSavedMedicationList } from '../hooks/useDailyEntry';
+import { getMedicationPresets, deleteMedicationPreset } from '../hooks/useDailyEntry';
 import {
   Moon, Pill, UtensilsCrossed, Heart, Trophy,
-  ThumbsUp, Lightbulb, Brain, Star, Plus, Trash2, Shield, Sparkles,
+  ThumbsUp, Lightbulb, Brain, Star, Plus, Trash2, Shield, Sparkles, X,
 } from 'lucide-react';
 
 interface NightPlannerProps {
@@ -36,7 +36,18 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
   updateMeal, updateWindDown, flushSave,
   disabled = false, lockedReason,
 }) => {
+  const [presetRefreshKey, setPresetRefreshKey] = useState(0);
   const waterCount = entry?.water_count || 0;
+
+  const presets = getMedicationPresets();
+  const activeMedNames = new Set(medications.map((m) => (m.name || '').trim().toLowerCase()));
+  const availablePresets = presets.filter((p) => p.name && !activeMedNames.has(p.name.toLowerCase()));
+
+  const handleDeletePreset = (e: React.MouseEvent, name: string) => {
+    e.stopPropagation();
+    deleteMedicationPreset(name);
+    setPresetRefreshKey((k) => k + 1);
+  };
 
   const isStarted = !!(
     entry?.night_mood ||
@@ -112,7 +123,7 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
           <span>This section is private and only visible to you.</span>
         </div>
 
-        {medications.length > 0 && (
+        {medications.length > 0 ? (
           <div className="space-y-3 mb-3">
             {/* Header - Desktop only */}
             <div className="hidden md:grid md:grid-cols-[1fr_100px_95px_56px_36px] gap-2.5 text-xs font-bold text-text-muted dark:text-dark-text-muted px-1 items-center">
@@ -201,6 +212,10 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
               </div>
             ))}
           </div>
+        ) : (
+          <div className="text-xs text-text-muted dark:text-dark-text-muted py-1 mb-2">
+            No medications added for this day yet.
+          </div>
         )}
 
         <div className="flex flex-wrap items-center gap-2">
@@ -215,38 +230,43 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
           </button>
         </div>
 
-        {/* Quick Add from Saved Medications */}
-        {(() => {
-          const savedList = getSavedMedicationList();
-          const activeNames = new Set(medications.map((m) => (m.name || '').trim().toLowerCase()));
-          const available = savedList.filter((sm) => sm.name && !activeNames.has(sm.name.toLowerCase()));
-          if (available.length === 0) return null;
-
-          return (
-            <div className="mt-3 pt-3 border-t border-border/40 dark:border-dark-border/40">
-              <div className="flex items-center gap-1.5 text-[11px] font-bold text-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-2">
-                <Sparkles size={13} className="text-lavender-dark dark:text-lavender" />
-                <span>Saved Medications (Click to Quick Add)</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {available.map((sm) => (
+        {/* Saved Presets (Created when user checks Taken) */}
+        {availablePresets.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-border/40 dark:border-dark-border/40">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-2">
+              <Sparkles size={13} className="text-lavender-dark dark:text-lavender" />
+              <span>Saved Presets (Click to add row)</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {availablePresets.map((p) => (
+                <div
+                  key={p.name}
+                  className="inline-flex items-center gap-1 bg-lavender/15 hover:bg-lavender/25 dark:bg-dark-card border border-lavender/30 hover:border-lavender rounded-full pl-3 pr-1.5 py-1 text-xs transition-all shadow-xs"
+                >
                   <button
-                    key={sm.name}
                     type="button"
-                    className="text-xs px-3 py-1 rounded-full bg-lavender/15 hover:bg-lavender/25 dark:bg-dark-card text-text-primary dark:text-dark-text border border-lavender/30 hover:border-lavender flex items-center gap-1.5 transition-all tap-spring shadow-xs"
-                    onClick={() => addMedication({ name: sm.name, dose: sm.dose || '', time: sm.time || '', taken: false })}
+                    className="flex items-center gap-1.5 text-text-primary dark:text-dark-text font-semibold hover:text-lavender-dark"
+                    onClick={() => addMedication({ name: p.name, dose: p.dose || '', time: p.time || '', taken: false })}
                     disabled={disabled}
-                    title="Click to add to today's tracker"
+                    title={`Add ${p.name} preset`}
                   >
                     <Plus size={12} className="text-lavender-dark dark:text-lavender" />
-                    <span className="font-semibold">{sm.name}</span>
-                    {sm.dose && <span className="opacity-70 text-[10px]">({sm.dose})</span>}
+                    <span>{p.name}</span>
+                    {p.dose && <span className="opacity-70 text-[10px] font-normal">({p.dose})</span>}
                   </button>
-                ))}
-              </div>
+                  <button
+                    type="button"
+                    className="text-text-muted hover:text-red-400 p-0.5 rounded-full ml-1"
+                    onClick={(e) => handleDeletePreset(e, p.name)}
+                    title={`Delete ${p.name} preset`}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* Side effects / notes */}
         <div className="mt-4">

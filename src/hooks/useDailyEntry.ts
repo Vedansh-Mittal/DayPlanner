@@ -60,68 +60,53 @@ function defaultWindDown(): Omit<WindDownItem, 'id' | 'daily_entry_id' | 'user_i
   }));
 }
 
-export interface SavedMedication {
+export interface MedicationPreset {
   name: string;
   dose: string | null;
   time: string | null;
 }
 
-/** Get all unique medications previously saved by the user across history and local store */
-export function getSavedMedicationList(): SavedMedication[] {
+/** Get all medication presets saved when user checks Taken */
+export function getMedicationPresets(): MedicationPreset[] {
   try {
-    const savedStr = localStorage.getItem('mewwmory_saved_medications');
-    const directSaved: SavedMedication[] = savedStr ? JSON.parse(savedStr) : [];
-    
-    // Also scan daylight_offline_cache for any past medications
-    const cacheStr = localStorage.getItem('daylight_offline_cache');
-    const cacheMeds: SavedMedication[] = [];
-    if (cacheStr) {
-      const cache = JSON.parse(cacheStr);
-      Object.keys(cache).forEach((dateKey) => {
-        const entry = cache[dateKey];
-        if (Array.isArray(entry?.medications)) {
-          entry.medications.forEach((m: any) => {
-            if (m?.name && m.name.trim()) {
-              cacheMeds.push({
-                name: m.name.trim(),
-                dose: m.dose || null,
-                time: m.time || null,
-              });
-            }
-          });
-        }
-      });
-    }
-
-    const map = new Map<string, SavedMedication>();
-    [...cacheMeds, ...directSaved].forEach((m) => {
-      if (m.name) {
-        map.set(m.name.toLowerCase(), m);
-      }
-    });
-
-    return Array.from(map.values());
-  } catch (e) {
-    console.error('Error reading saved medications:', e);
+    const savedStr = localStorage.getItem('mewwmory_medication_presets');
+    if (!savedStr) return [];
+    const list: MedicationPreset[] = JSON.parse(savedStr);
+    return Array.isArray(list)
+      ? list.filter((p) => p && typeof p.name === 'string' && p.name.trim().length >= 2)
+      : [];
+  } catch {
     return [];
   }
 }
 
-/** Store medication to permanent local registry */
-export function saveMedicationToMemory(name: string, dose?: string | null, time?: string | null) {
-  if (!name || !name.trim()) return;
+/** Save or update a medication preset (called ONLY when user checks 'Taken: true') */
+export function saveMedicationPreset(name: string, dose?: string | null, time?: string | null) {
+  const cleanName = (name || '').trim();
+  if (!cleanName || cleanName.length < 2) return;
   try {
-    const existing = getSavedMedicationList();
-    const map = new Map<string, SavedMedication>();
-    existing.forEach((m) => map.set(m.name.toLowerCase(), m));
-    map.set(name.trim().toLowerCase(), {
-      name: name.trim(),
-      dose: dose || null,
-      time: time || null,
+    const list = getMedicationPresets();
+    const map = new Map<string, MedicationPreset>();
+    list.forEach((p) => map.set(p.name.toLowerCase(), p));
+    map.set(cleanName.toLowerCase(), {
+      name: cleanName,
+      dose: (dose || '').trim() || null,
+      time: (time || '').trim() || null,
     });
-    localStorage.setItem('mewwmory_saved_medications', JSON.stringify(Array.from(map.values())));
+    localStorage.setItem('mewwmory_medication_presets', JSON.stringify(Array.from(map.values())));
   } catch (e) {
-    console.error('Error writing saved medication:', e);
+    console.error('Error saving medication preset:', e);
+  }
+}
+
+/** Remove a preset from storage */
+export function deleteMedicationPreset(name: string) {
+  const cleanName = (name || '').trim().toLowerCase();
+  try {
+    const list = getMedicationPresets().filter((p) => p.name.trim().toLowerCase() !== cleanName);
+    localStorage.setItem('mewwmory_medication_presets', JSON.stringify(list));
+  } catch (e) {
+    console.error('Error deleting medication preset:', e);
   }
 }
 
@@ -217,20 +202,7 @@ export function useDailyEntry(dateStr: string) {
           actionStepsRef.current = normalizedCA;
           setActionSteps(normalizedCA);
 
-          let cachedMeds = (cachedData.medications as Medication[]) || [];
-          if (cachedMeds.length === 0) {
-            const savedList = getSavedMedicationList();
-            cachedMeds = savedList.map((sm, idx) => ({
-              id: `temp_${Date.now()}_${idx}`,
-              daily_entry_id: cachedData.id || '',
-              user_id: user.id,
-              sort_order: idx,
-              name: sm.name,
-              dose: sm.dose,
-              time: sm.time,
-              taken: false,
-            }));
-          }
+          const cachedMeds = ((cachedData.medications as Medication[]) || []).filter((m) => m && m.name && m.name.trim());
           setMedications(cachedMeds);
           medicationsRef.current = cachedMeds;
 
@@ -282,62 +254,9 @@ export function useDailyEntry(dateStr: string) {
       actionStepsRef.current = normalizedA;
       setActionSteps(normalizedA);
 
-      // If no medications logged for this date yet, auto-carry forward user's previously saved medications
-      let loadedMeds = ((data.medications as Medication[]) || []).sort((a, b) => a.sort_order - b.sort_order);
-      if (loadedMeds.length === 0) {
-        const memoryMeds = getSavedMedicationList();
-        if (memoryMeds.length > 0) {
-          loadedMeds = memoryMeds.map((sm, idx) => ({
-            id: `temp_${Date.now()}_${idx}`,
-            daily_entry_id: data?.id || '',
-            user_id: user.id,
-            sort_order: idx,
-            name: sm.name,
-            dose: sm.dose,
-            time: sm.time,
-            taken: false,
-          }));
-        } else {
-          try {
-            const { data: recentMeds } = await supabase
-              .from('medications')
-              .select('name, dose, time, sort_order')
-              .eq('user_id', user.id)
-              .not('name', 'is', null)
-              .order('created_at', { ascending: false })
-              .limit(20);
-
-            if (recentMeds && recentMeds.length > 0) {
-              const seen = new Set<string>();
-              loadedMeds = [];
-              recentMeds.forEach((m: any, idx: number) => {
-                const trimmed = (m.name || '').trim();
-                if (trimmed && !seen.has(trimmed.toLowerCase())) {
-                  seen.add(trimmed.toLowerCase());
-                  saveMedicationToMemory(trimmed, m.dose, m.time);
-                  loadedMeds.push({
-                    id: `temp_${Date.now()}_${idx}`,
-                    daily_entry_id: data?.id || '',
-                    user_id: user.id,
-                    sort_order: idx,
-                    name: m.name,
-                    dose: m.dose || null,
-                    time: m.time || null,
-                    taken: false,
-                  });
-                }
-              });
-            }
-          } catch (e) {
-            console.warn('Could not auto-fetch previous medications:', e);
-          }
-        }
-      } else {
-        // Save current medications to persistent memory
-        loadedMeds.forEach((m) => {
-          if (m.name) saveMedicationToMemory(m.name, m.dose, m.time);
-        });
-      }
+      const loadedMeds = ((data.medications as Medication[]) || [])
+        .filter((m) => m && m.name && m.name.trim())
+        .sort((a, b) => a.sort_order - b.sort_order);
 
       setMedications(loadedMeds);
       medicationsRef.current = loadedMeds;
@@ -363,7 +282,7 @@ export function useDailyEntry(dateStr: string) {
         loadedMeds
       );
     } else {
-      // No entry in DB yet -> initialize default fields and auto-carry forward previous medications
+      // No entry in DB yet -> clean default fields with empty medications
       setEntryId(null);
       setEntryFields({ ...DEFAULT_ENTRY_FIELDS });
       const defP = defaultPriorities();
@@ -372,57 +291,8 @@ export function useDailyEntry(dateStr: string) {
       actionStepsRef.current = defA;
       setPriorities(defP);
       setActionSteps(defA);
-      
-      let carriedMeds: Medication[] = [];
-      const memoryMeds = getSavedMedicationList();
-      if (memoryMeds.length > 0) {
-        carriedMeds = memoryMeds.map((sm, idx) => ({
-          id: `temp_${Date.now()}_${idx}`,
-          daily_entry_id: '',
-          user_id: user.id,
-          sort_order: idx,
-          name: sm.name,
-          dose: sm.dose,
-          time: sm.time,
-          taken: false,
-        }));
-      } else {
-        try {
-          const { data: recentMeds } = await supabase
-            .from('medications')
-            .select('name, dose, time, sort_order')
-            .eq('user_id', user.id)
-            .not('name', 'is', null)
-            .order('created_at', { ascending: false })
-            .limit(20);
-
-          if (recentMeds && recentMeds.length > 0) {
-            const seen = new Set<string>();
-            recentMeds.forEach((m: any, idx: number) => {
-              const trimmed = (m.name || '').trim();
-              if (trimmed && !seen.has(trimmed.toLowerCase())) {
-                seen.add(trimmed.toLowerCase());
-                saveMedicationToMemory(trimmed, m.dose, m.time);
-                carriedMeds.push({
-                  id: `temp_${Date.now()}_${idx}`,
-                  daily_entry_id: '',
-                  user_id: user.id,
-                  sort_order: idx,
-                  name: m.name,
-                  dose: m.dose || null,
-                  time: m.time || null,
-                  taken: false,
-                });
-              }
-            });
-          }
-        } catch (e) {
-          console.warn('Could not auto-fetch previous medications for empty day:', e);
-        }
-      }
-      setMedications(carriedMeds);
-      medicationsRef.current = carriedMeds;
-
+      setMedications([]);
+      medicationsRef.current = [];
       setMeals(defaultMeals());
       setWindDownItems(defaultWindDown());
     }
@@ -740,20 +610,17 @@ export function useDailyEntry(dateStr: string) {
     return data.id;
   };
 
-  const addMedication = useCallback((initial?: Partial<Medication>) => {
+  const addMedication = useCallback((preset?: Partial<Medication>) => {
     const newMed: Medication = {
       id: `temp_${Date.now()}_${medicationsRef.current.length}`,
       daily_entry_id: entryIdRef.current || '',
       user_id: user?.id || '',
       sort_order: medicationsRef.current.length,
-      name: initial?.name || '',
-      dose: initial?.dose || '',
-      time: initial?.time || '',
-      taken: initial?.taken || false,
+      name: preset?.name || '',
+      dose: preset?.dose || '',
+      time: preset?.time || '',
+      taken: false,
     };
-    if (newMed.name) {
-      saveMedicationToMemory(newMed.name, newMed.dose, newMed.time);
-    }
     setMedications((prev) => {
       const next = [...prev, newMed];
       medicationsRef.current = next;
@@ -784,8 +651,9 @@ export function useDailyEntry(dateStr: string) {
       const next = prev.map((m) => {
         if (m.id === id) {
           const updated = { ...m, [field]: value };
-          if (updated.name) {
-            saveMedicationToMemory(updated.name, updated.dose, updated.time);
+          // ONLY save/update preset when user checks Taken to true!
+          if (field === 'taken' && value === true && updated.name && updated.name.trim().length >= 2) {
+            saveMedicationPreset(updated.name, updated.dose, updated.time);
           }
           return updated;
         }
