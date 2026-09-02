@@ -60,6 +60,7 @@ export const FOCUS_OPTIONS = [
   'Health & energy',
   'Personal projects',
   'Inner peace & balance',
+  'Other',
 ] as const;
 
 export const INTEREST_OPTIONS = [

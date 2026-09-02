@@ -37,6 +37,7 @@ export const OnboardingPage: React.FC = () => {
   // Optional personalisation (Multi-select)
   const [lifeStages, setLifeStages] = useState<string[]>([]);
   const [currentFocuses, setCurrentFocuses] = useState<string[]>([]);
+  const [customFocus, setCustomFocus] = useState<string>('');
   const [supportStyles, setSupportStyles] = useState<('gentle' | 'cheerful' | 'direct' | 'playful')[]>(['gentle']);
 
   const filteredTz = tzSearch
@@ -47,6 +48,14 @@ export const OnboardingPage: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
+      let mergedFocuses = currentFocuses.filter((f) => f !== 'Other');
+      if (currentFocuses.includes('Other') && customFocus.trim()) {
+        const parts = customFocus.split(',').map((p) => p.trim()).filter(Boolean);
+        for (const p of parts) {
+          if (!mergedFocuses.includes(p)) mergedFocuses.push(p);
+        }
+      }
+
       await Promise.all([
         completeOnboarding({
           display_name: displayName || null,
@@ -58,7 +67,7 @@ export const OnboardingPage: React.FC = () => {
         }),
         updatePersonalisation({
           life_stages: lifeStages,
-          current_focuses: currentFocuses,
+          current_focuses: mergedFocuses,
           support_styles: supportStyles.length ? supportStyles : ['gentle'],
           personalisation_enabled: true,
           trivia_enabled: true,
@@ -285,7 +294,7 @@ export const OnboardingPage: React.FC = () => {
           <span className="text-[10px] text-text-muted">Select multiple</span>
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {FOCUS_OPTIONS.slice(0, 6).map((fc) => {
+          {FOCUS_OPTIONS.map((fc) => {
             const isSelected = currentFocuses.includes(fc);
             return (
               <button
@@ -307,6 +316,16 @@ export const OnboardingPage: React.FC = () => {
             );
           })}
         </div>
+        {currentFocuses.includes('Other') && (
+          <input
+            type="text"
+            className="input-field text-xs py-1.5 mt-2 transition-all"
+            placeholder="Specify your focus (comma-separated)..."
+            value={customFocus}
+            onChange={(e) => setCustomFocus(e.target.value)}
+            autoFocus
+          />
+        )}
       </div>
 
       <div>

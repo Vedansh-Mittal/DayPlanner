@@ -48,6 +48,7 @@ export const SettingsPage: React.FC = () => {
   const [careerFields, setCareerFields] = useState<string[]>([]);
   const [customField, setCustomField] = useState<string>('');
   const [currentFocuses, setCurrentFocuses] = useState<string[]>([]);
+  const [customFocus, setCustomFocus] = useState<string>('');
   const [interests, setInterests] = useState<string[]>([]);
   const [supportStyles, setSupportStyles] = useState<('gentle' | 'cheerful' | 'direct' | 'playful')[]>(['gentle']);
   const [personalisationEnabled, setPersonalisationEnabled] = useState<boolean>(true);
@@ -299,13 +300,29 @@ export const SettingsPage: React.FC = () => {
   useEffect(() => {
     if (personalisation) {
       setLifeStages(personalisation.life_stages || []);
-      setCareerFields(personalisation.career_fields || []);
+      
       const knownFields = CAREER_FIELD_OPTIONS as readonly string[];
-      const customOnes = (personalisation.career_fields || []).filter((f) => !knownFields.includes(f) && f !== 'Other');
-      if (customOnes.length) {
+      const savedFields = personalisation.career_fields || [];
+      const standardFields = savedFields.filter((f) => knownFields.includes(f as any));
+      const customOnes = savedFields.filter((f) => !knownFields.includes(f as any) && f !== 'Other');
+      
+      if (customOnes.length > 0) {
+        if (!standardFields.includes('Other')) standardFields.push('Other');
         setCustomField(customOnes.join(', '));
       }
-      setCurrentFocuses(personalisation.current_focuses || []);
+      setCareerFields(standardFields);
+
+      const knownFocuses = FOCUS_OPTIONS as readonly string[];
+      const savedFocuses = personalisation.current_focuses || [];
+      const standardFocuses = savedFocuses.filter((f) => knownFocuses.includes(f as any));
+      const customFocs = savedFocuses.filter((f) => !knownFocuses.includes(f as any) && f !== 'Other');
+
+      if (customFocs.length > 0) {
+        if (!standardFocuses.includes('Other')) standardFocuses.push('Other');
+        setCustomFocus(customFocs.join(', '));
+      }
+      setCurrentFocuses(standardFocuses);
+
       setInterests(personalisation.interests || []);
       setSupportStyles(personalisation.support_styles?.length ? personalisation.support_styles : ['gentle']);
       setPersonalisationEnabled(personalisation.personalisation_enabled !== false);
@@ -321,13 +338,22 @@ export const SettingsPage: React.FC = () => {
     setSaving(true);
     setSaved(false);
     try {
-      const mergedCareerFields = [...careerFields];
-      if (customField.trim()) {
+      let mergedCareerFields = careerFields.filter((f) => f !== 'Other');
+      if (careerFields.includes('Other') && customField.trim()) {
         const parts = customField.split(',').map((p) => p.trim()).filter(Boolean);
         for (const p of parts) {
           if (!mergedCareerFields.includes(p)) mergedCareerFields.push(p);
         }
       }
+
+      let mergedFocuses = currentFocuses.filter((f) => f !== 'Other');
+      if (currentFocuses.includes('Other') && customFocus.trim()) {
+        const parts = customFocus.split(',').map((p) => p.trim()).filter(Boolean);
+        for (const p of parts) {
+          if (!mergedFocuses.includes(p)) mergedFocuses.push(p);
+        }
+      }
+
       await Promise.all([
         updateSettings({
           display_name: displayName || null,
@@ -341,7 +367,7 @@ export const SettingsPage: React.FC = () => {
         updatePersonalisation({
           life_stages: lifeStages,
           career_fields: mergedCareerFields,
-          current_focuses: currentFocuses,
+          current_focuses: mergedFocuses,
           interests,
           support_styles: supportStyles.length ? supportStyles : ['gentle'],
           personalisation_enabled: personalisationEnabled,
@@ -552,7 +578,7 @@ export const SettingsPage: React.FC = () => {
                 </label>
                 <span className="text-[10px] text-text-muted">Multi-select enabled</span>
               </div>
-              <div className="flex flex-wrap gap-2 mb-2">
+              <div className="flex flex-wrap gap-2">
                 {CAREER_FIELD_OPTIONS.map((field) => {
                   const isSelected = careerFields.includes(field);
                   return (
@@ -578,13 +604,16 @@ export const SettingsPage: React.FC = () => {
                   );
                 })}
               </div>
-              <input
-                type="text"
-                className="input-field text-xs py-2 mt-1"
-                placeholder="Add custom fields or specializations (comma-separated, e.g. Full-Stack, AI Research, Med-Tech)..."
-                value={customField}
-                onChange={(e) => setCustomField(e.target.value)}
-              />
+              {careerFields.includes('Other') && (
+                <input
+                  type="text"
+                  className="input-field text-xs py-2 mt-2 transition-all animate-fadeIn"
+                  placeholder="Specify your field or specialization (e.g. Counselling Psychology, AI Research, Med-Tech)..."
+                  value={customField}
+                  onChange={(e) => setCustomField(e.target.value)}
+                  autoFocus
+                />
+              )}
             </div>
 
             {/* Current Focus(es) */}
@@ -622,6 +651,16 @@ export const SettingsPage: React.FC = () => {
                   );
                 })}
               </div>
+              {currentFocuses.includes('Other') && (
+                <input
+                  type="text"
+                  className="input-field text-xs py-2 mt-2 transition-all animate-fadeIn"
+                  placeholder="Specify your custom goals or focus areas (comma-separated)..."
+                  value={customFocus}
+                  onChange={(e) => setCustomFocus(e.target.value)}
+                  autoFocus
+                />
+              )}
             </div>
 
             {/* Preferred Support Style(s) */}
