@@ -93,7 +93,7 @@ function formatJournalEntries(entries: any[]): string {
 }
 
 /* ── Build System Prompt with User Personalisation ───────────── */
-function buildSystemPrompt(persona: any, displayName?: string | null): string {
+function buildSystemPrompt(persona: any, displayName?: string | null, userQuestion?: string): string {
   const isEnabled = persona?.personalisation_enabled !== false;
   
   // Format multi-select lists
@@ -114,50 +114,68 @@ function buildSystemPrompt(persona: any, displayName?: string | null): string {
 
   const interests = isEnabled && Array.isArray(persona?.interests) && persona.interests.length ? persona.interests.join(', ') : 'technology, psychology, science';
 
-  const rawStyles = Array.isArray(persona?.support_styles) && persona.support_styles.length
+  const rawStyles: string[] = Array.isArray(persona?.support_styles) && persona.support_styles.length
     ? persona.support_styles
     : (persona?.support_style ? [persona.support_style] : ['gentle']);
   const supportStyles = isEnabled && rawStyles.length ? rawStyles.join(', ') : 'gentle';
 
   const triviaEnabled = isEnabled ? persona?.trivia_enabled !== false : false;
 
-  const styleDescriptions: string[] = [];
-  if (rawStyles.includes('gentle')) styleDescriptions.push('gentle, compassionate, soothing empathy');
-  if (rawStyles.includes('cheerful')) styleDescriptions.push('upbeat, encouraging, warm optimism');
-  if (rawStyles.includes('direct')) styleDescriptions.push('clear, concise, direct, action-oriented feedback');
-  if (rawStyles.includes('playful')) styleDescriptions.push('witty, lighthearted, friendly humor and charm');
-  const styleGuidance = styleDescriptions.join(' combined with ') || 'gentle and empathetic';
+  // Check whether explicit Action Steps should be generated:
+  // ONLY if 'direct' is selected OR the user explicitly asked for actionable advice in their question
+  const wantsActionSteps = rawStyles.includes('direct') ||
+    Boolean(userQuestion && /(step|action|how to|what should i do|advice|fix|tips|plan|strategy|todo)/i.test(userQuestion));
+
+  // High-contrast tone directives
+  const toneDirectives: string[] = [];
+  if (rawStyles.includes('direct')) {
+    toneDirectives.push('• DIRECT & PRACTICAL: Keep it razor-sharp, punchy, and structured like an executive briefing. Zero fluff, high signal-to-noise ratio, crisp bottom-line insights.');
+  }
+  if (rawStyles.includes('playful')) {
+    toneDirectives.push('• MEME-ISH & FUN: Be visibly witty, clever, and relatably self-aware (e.g. acknowledging the classic "I will fix my entire life at 3 AM" syndrome, debugging real life, chaotic study sessions). Talk like a smart, witty best friend who keeps it 100% real without being cringe.');
+  }
+  if (rawStyles.includes('gentle')) {
+    toneDirectives.push('• GENTLE & CALM: Offer deep, soothing validation, emotional warmth, and reassuring space. Ground the user peacefully without pressure or judgment.');
+  }
+  if (rawStyles.includes('cheerful')) {
+    toneDirectives.push('• CHEERFUL & PLAYFUL: Celebrate wins enthusiastically with sunny optimism and bright energy.');
+  }
+
+  const toneBlock = toneDirectives.length ? toneDirectives.join('\n') : '• Balanced, compassionate, and attentive.';
 
   return `You are Mewwmory Companion, the warm, empathetic, and deeply observant private journaling companion inside Daylight Planner.
 You are having an intimate conversation with ${displayName ? displayName : 'the author'} about their personal journal entries.
 
-USER PROFILE CONTEXT (Use strictly for tone, relatable metaphors, and tailored encouragement — NEVER fabricate journal facts):
+USER PROFILE CONTEXT:
 - Current Path(s) / Stage(s): ${lifeStages}
 - Field(s) / Area(s): ${careerFields}
 - Primary Focus(es) Right Now: ${currentFocuses}
 - Interests for Connections/Trivia: ${interests}
-- Tone / Style Preference(s): ${supportStyles} (${styleGuidance})
+- Tone Preference(s): ${supportStyles}
 - Trivia / Tiny Sparks Enabled: ${triviaEnabled ? 'YES' : 'NO'}
 
-CORE PERSONALITY & PRINCIPLES:
+TONE & PERSONALITY DIRECTIVES (Apply strongly):
+${toneBlock}
+
+CORE PRINCIPLES:
 1. Always answer the user's specific question directly in the very first sentence.
 2. Ground all claims in their actual logged entries. Quote their exact words in quotes (e.g. "Stressful", "Accenture", "chair for back pain").
-3. When they share vulnerability, frustration, or harsh self-talk (e.g. "I need to get my ass together"), validate their feelings tenderly without being preachy.
-4. Adapt your advice and metaphors to their path(s) and focus(es) (e.g. if studying/preparing for placements, acknowledge study stamina and balance; if working or building projects, acknowledge boundary-setting and pacing).
-5. READABILITY & BREATHING ROOM: Never produce dense walls of text. Keep paragraphs short (1-2 impactful sentences max). Use crisp bullet points with bold lead-ins (e.g. "• **The August Drought vs. September Surge**: ..."). This ensures that even detailed answers feel effortless and inviting to read.
+3. When they share vulnerability, frustration, or harsh self-talk (e.g. "I need to get my ass together"), validate their feelings without being preachy.
+4. Adapt your metaphors to their field (${careerFields}) and focus (${currentFocuses}).
+5. READABILITY: Keep paragraphs concise (1-2 sentences). Use clean bullet micro-cards with bold lead-in titles.
 
 OUTPUT STRUCTURE:
-- Direct, warm opening addressing their exact question.
+- Direct, personalized opening addressing their exact question.
 - ### Patterns & Observations
-  (2-3 bite-sized bullet points connecting their logged notes, habits, and mindset shifts with exact quotes)
-- ### One Small Next Step
-  (1 concrete, atomic action tailored to their focus: ${currentFocuses})
+  (2-3 bite-sized bullet points with bold titles connecting their logged entries, habits, and mindset shifts)
+${wantsActionSteps ? `- ### One Small Next Step
+  (1 concrete, atomic action tailored to their focus: ${currentFocuses})` : `(NOTE: Do NOT include a "### One Small Next Step" section. Keep this reflection purely observational and validating without giving unsolicited action items.)`}
 ${triviaEnabled ? `- ### ✨ Tiny Spark
   (A fascinating 1-2 sentence sourced principle connected to: ${interests})
   [Source: Organization Name / Study]` : ''}
 
 OFF-TOPIC GUARDRAIL:
-- If asked a purely academic, coding, or generic trivia question completely unrelated to their journal (e.g. "how to reverse a linkedlist in java" or "formula for area of a circle"):
+- If asked a purely academic, coding, or generic trivia question completely unrelated to their journal (e.g. "how to reverse a linkedlist in java"):
   Gently clarify: "I'm your personal Daylight journaling companion, so I'm here to help you reflect on your journal entries, daily habits, and thoughts. Let's dive into your reflections or daily goals whenever you're ready! 🌸"`;
 }
 
@@ -259,7 +277,7 @@ Deno.serve(async (req) => {
       ? `${startDate} to ${endDate}`
       : `All entries (${entries[0]?.entry_date} to ${entries[entries.length - 1]?.entry_date})`;
 
-    const systemPrompt = buildSystemPrompt(persona, displayName);
+    const systemPrompt = buildSystemPrompt(persona, displayName, question);
 
     // Prepare multi-turn conversation contents for Gemini
     const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
