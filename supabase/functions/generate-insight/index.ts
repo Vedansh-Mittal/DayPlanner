@@ -40,9 +40,26 @@ function isOffTopicQuery(q: string): boolean {
   return codeMathKeywords.some((k) => lower.includes(k));
 }
 
+/* ── Filter Out Ghost / Unlogged Entries ──────────────────────── */
+function hasMeaningfulData(e: any): boolean {
+  if (e.daily_note?.trim()) return true;
+  if (e.morning_mood || e.night_mood) return true;
+  if (e.morning_brain_dump?.trim() || e.night_brain_dump?.trim()) return true;
+  if (e.morning_why?.trim() || e.morning_inspire?.trim()) return true;
+  if (e.night_win?.trim() || e.night_went_well?.trim() || e.night_improve?.trim() || e.night_intention?.trim()) return true;
+  if (e.night_gratitude_1?.trim() || e.night_gratitude_2?.trim() || e.night_gratitude_3?.trim()) return true;
+  if (Array.isArray(e.priorities) && e.priorities.some((p: any) => p && p.text?.trim())) return true;
+  if (Array.isArray(e.action_steps) && e.action_steps.some((a: any) => a && a.text?.trim())) return true;
+  if (Array.isArray(e.meals) && e.meals.some((m: any) => m && m.ate)) return true;
+  if (Array.isArray(e.medications) && e.medications.some((m: any) => m && m.name?.trim())) return true;
+  if (e.water_count && Number(e.water_count) > 0) return true;
+  return false;
+}
+
 /* ── Format Journal Entries for AI Context ───────────────────── */
 function formatJournalEntries(entries: any[]): string {
-  return entries.map((e) => {
+  const validEntries = entries.filter(hasMeaningfulData);
+  return validEntries.map((e) => {
     const parts: string[] = [];
     parts.push(`=== DATE: ${e.entry_date} ===`);
     if (e.daily_note) parts.push(`Daily Note: "${e.daily_note}"`);
@@ -65,10 +82,14 @@ function formatJournalEntries(entries: any[]): string {
     }
 
     // Day habits
-    if (e.water_count != null) parts.push(`Water: ${e.water_count} glasses`);
-    if (Array.isArray(e.meals) && e.meals.length) {
-      const mList = e.meals.map((m: any) => `${m.meal_type}: ${m.ate ? (m.time ? `Ate at ${m.time}` : 'Ate') : 'Skipped'}${m.notes ? ` (${m.notes})` : ''}`);
-      parts.push(`Meals: ${mList.join('; ')}`);
+    if (e.water_count != null && Number(e.water_count) > 0) {
+      parts.push(`Water: ${e.water_count} glasses`);
+    }
+    if (Array.isArray(e.meals) && e.meals.some((m: any) => m && m.ate)) {
+      const mList = e.meals
+        .filter((m: any) => m && m.ate)
+        .map((m: any) => `${m.meal_type}: Ate${m.time ? ` at ${m.time}` : ''}${m.notes ? ` (${m.notes})` : ''}`);
+      if (mList.length) parts.push(`Logged Meals: ${mList.join('; ')}`);
     }
     if (Array.isArray(e.medications) && e.medications.length) {
       const medList = e.medications
@@ -259,7 +280,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Failed to fetch planner entries' }, 500);
     }
 
-    const entries = rawEntries || [];
+    const entries = (rawEntries || []).filter(hasMeaningfulData);
 
     if (entries.length === 0) {
       const rangeLabel = startDate && endDate && startDate !== 'all'
