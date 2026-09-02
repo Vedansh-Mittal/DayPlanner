@@ -164,6 +164,39 @@ function buildSystemPrompt(persona: any, displayName?: string | null, userQuesti
 
   const toneBlock = toneDirectives.length ? toneDirectives.join('\n') : '• Balanced, compassionate, and attentive.';
 
+  // Detect conversational intent
+  const trimmedQ = (userQuestion || '').trim();
+  const isCloserOrGratitude =
+    /^(thanks?|thank\s*you|thx|ty|good\s*night|gn|bye|see\s*you|talk\s*later|got\s*it|makes\s*sense|okay\s*got\s*it|cool|appreciate\s*it|thank\s*you\s*so\s*much|thanks\s*a\s*lot|perfect\s*thanks)[!.\s]*$/i.test(trimmedQ);
+
+  const isGreeting =
+    /^(hi|hello|hey|heya|howdy|good\s*morning|good\s*afternoon|good\s*evening|what'?s\s*up|sup)[!.\s]*$/i.test(trimmedQ);
+
+  let outputStructureInstructions = '';
+
+  if (isCloserOrGratitude) {
+    outputStructureInstructions = `CONVERSATIONAL CLOSER / GRATITUDE DETECTED:
+The user is saying a closing remark or gratitude ("${trimmedQ}").
+- Respond warmly, naturally, and concisely in 1-2 friendly sentences (e.g. "You're very welcome, ${displayName || 'friend'}! Rest well and take things one step at a time. I'm right here whenever you want to reflect again 🌸").
+- DO NOT output any "### Patterns & Observations" or "### One Small Next Step" sections. Keep it natural, human, and brief.`;
+  } else if (isGreeting) {
+    outputStructureInstructions = `GREETING DETECTED:
+The user is greeting you ("${trimmedQ}").
+- Respond in 1-2 friendly, welcoming sentences asking how they are feeling or inviting them to share today's reflections or daily goals.
+- DO NOT output "### Patterns & Observations" or "### One Small Next Step".`;
+  } else {
+    // Standard / Deep reflection mode
+    outputStructureInstructions = `OUTPUT STRUCTURE:
+- Direct, personalized opening addressing their exact question.
+- ### Patterns & Observations
+  (2-3 bite-sized bullet points with bold titles connecting their logged entries, habits, and mindset shifts)
+${wantsActionSteps ? `- ### One Small Next Step
+  (1 concrete, atomic action tailored to their focus: ${currentFocuses})` : `(NOTE: Do NOT include a "### One Small Next Step" section. Keep this reflection purely observational and validating without giving unsolicited action items.)`}
+${triviaEnabled ? `- ### ✨ Tiny Spark
+  (A fascinating 1-2 sentence sourced principle connected to: ${interests})
+  [Source: Organization Name / Study]` : ''}`;
+  }
+
   return `You are Mewwmory Companion, the warm, empathetic, and deeply observant private journaling companion inside Daylight Planner.
 You are having an intimate conversation with ${displayName ? displayName : 'the author'} about their personal journal entries.
 
@@ -185,15 +218,7 @@ CORE PRINCIPLES:
 4. Adapt your metaphors to their field (${careerFields}) and focus (${currentFocuses}).
 5. READABILITY: Keep paragraphs concise (1-2 sentences). Use clean bullet micro-cards with bold lead-in titles.
 
-OUTPUT STRUCTURE:
-- Direct, personalized opening addressing their exact question.
-- ### Patterns & Observations
-  (2-3 bite-sized bullet points with bold titles connecting their logged entries, habits, and mindset shifts)
-${wantsActionSteps ? `- ### One Small Next Step
-  (1 concrete, atomic action tailored to their focus: ${currentFocuses})` : `(NOTE: Do NOT include a "### One Small Next Step" section. Keep this reflection purely observational and validating without giving unsolicited action items.)`}
-${triviaEnabled ? `- ### ✨ Tiny Spark
-  (A fascinating 1-2 sentence sourced principle connected to: ${interests})
-  [Source: Organization Name / Study]` : ''}
+${outputStructureInstructions}
 
 OFF-TOPIC GUARDRAIL:
 - If asked a purely academic, coding, or generic trivia question completely unrelated to their journal (e.g. "how to reverse a linkedlist in java"):
