@@ -3,3 +3,11 @@ dist
 .env
 .env.local
 *.local
+
+# Research & Academic Paper Artifacts
+*.docx
+*.pdf
+*.pptx
+paper_figures/
+generate_paper_figures.py
+diagnostic_report.md
