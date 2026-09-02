@@ -447,6 +447,48 @@ export function useDailyEntry(dateStr: string) {
       const targetDate = dateStrRef.current;
       const fields = entryFieldsRef.current;
 
+      // Check if day has been completely cleared/emptied
+      const isCompletelyEmpty =
+        !fields.daily_note?.trim() &&
+        !fields.morning_mood &&
+        !fields.night_mood &&
+        !fields.morning_brain_dump?.trim() &&
+        !fields.night_brain_dump?.trim() &&
+        !fields.morning_why?.trim() &&
+        !fields.morning_inspire?.trim() &&
+        !fields.night_win?.trim() &&
+        !fields.night_went_well?.trim() &&
+        !fields.night_improve?.trim() &&
+        !fields.night_intention?.trim() &&
+        !fields.night_gratitude_1?.trim() &&
+        !fields.night_gratitude_2?.trim() &&
+        !fields.night_gratitude_3?.trim() &&
+        (!fields.water_count || fields.water_count === 0) &&
+        !prioritiesRef.current.some((p: any) => p && p.text?.trim()) &&
+        !actionStepsRef.current.some((a: any) => a && a.text?.trim()) &&
+        !mealsRef.current.some((m: any) => m && m.ate) &&
+        !medicationsRef.current.some((m: any) => m && m.name?.trim()) &&
+        !windDownRef.current.some((w: any) => w && w.completed);
+
+      if (isCompletelyEmpty) {
+        if (entryIdRef.current) {
+          // Permanently delete orphaned empty row from DB
+          await Promise.all([
+            supabase.from('priorities').delete().eq('daily_entry_id', entryIdRef.current),
+            supabase.from('action_steps').delete().eq('daily_entry_id', entryIdRef.current),
+            supabase.from('medications').delete().eq('daily_entry_id', entryIdRef.current),
+            supabase.from('meals').delete().eq('daily_entry_id', entryIdRef.current),
+            supabase.from('wind_down_items').delete().eq('daily_entry_id', entryIdRef.current),
+          ]);
+          await supabase.from('daily_entries').delete().eq('id', entryIdRef.current);
+          setEntryId(null);
+          entryIdRef.current = null;
+        }
+        savingRef.current = false;
+        setSaveStatus('idle');
+        return;
+      }
+
       const morningCompleted = isMorningComplete(fields, prioritiesRef.current, actionStepsRef.current);
       const nightCompleted = isNightComplete(fields, mealsRef.current, windDownRef.current);
 
