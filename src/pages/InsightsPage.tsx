@@ -1,19 +1,25 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuthStore } from '../stores/auth-store';
-import { queryInsights, parseDateRange, SUGGESTED_QUESTIONS, type GroundedInsightResponse, type EvidenceClaim, type EvidenceRef } from '../lib/insights-engine';
+import {
+  queryInsights,
+  SUGGESTED_QUESTIONS,
+  type ChatMessage,
+} from '../lib/insights-engine';
 import { AIThinkingCompanion } from '../components/AIThinkingCompanion';
 import { format, subDays, startOfMonth, endOfMonth, addMonths, subMonths, startOfWeek, addDays, isSameMonth, isSameDay, isAfter, isBefore, parse } from 'date-fns';
 import {
   Sparkles, Send, Loader2, HeartHandshake, Calendar, ChevronLeft, ChevronRight,
-  X, AlertTriangle, Shield, Clock, FileText, Info, RotateCcw,
+  X, RotateCcw, Clock, User, Info, MessageSquare, ArrowDown,
 } from 'lucide-react';
 
 /* ── Date Range Presets ────────────────────────────────────── */
-type RangePreset = 'last7' | 'last30' | 'thisMonth' | 'custom';
+type RangePreset = 'all' | 'last7' | 'last30' | 'thisMonth' | 'custom';
 
 function getPresetRange(preset: RangePreset): { start: string; end: string } | null {
   const today = new Date();
   switch (preset) {
+    case 'all':
+      return null;
     case 'last7':
       return { start: format(subDays(today, 7), 'yyyy-MM-dd'), end: format(today, 'yyyy-MM-dd') };
     case 'last30':
@@ -25,24 +31,11 @@ function getPresetRange(preset: RangePreset): { start: string; end: string } | n
   }
 }
 
-/* Check if a question contains an explicit date/timeline phrase */
-function hasExplicitDate(question: string): boolean {
-  const q = question.toLowerCase();
-  if (q.includes('today') || q.includes('yesterday') || q.includes('last week') || q.includes('this month') || q.includes('last month') || q.includes('2 weeks') || q.includes('14 days') || q.includes('7 days') || q.includes('30 days')) {
-    return true;
-  }
-  const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-  for (const m of months) {
-    if (q.includes(m)) return true;
-  }
-  if (/\b\d{4}-\d{2}-\d{2}\b/.test(q)) return true;
-  if (/\b\d{1,2}(st|nd|rd|th)?\s+(of\s+)?[a-z]+/i.test(q)) return true;
-  return false;
-}
-
-/* ── Inline Markdown Renderer (Bold + Quotes) ──────────────── */
+/* ── Inline Markdown Renderer (Bold + Styled Quotes) ───────── */
 function renderInlineTokens(text: string) {
+  // Regex splitting by bold (**...**) and quoted strings ("..." or “...”)
   const tokens = text.split(/(\*\*.*?\*\*|"[^"\n]+"|“[^”\n]+”)/g);
+
   return tokens.map((tok, i) => {
     if (tok.startsWith('**') && tok.endsWith('**') && tok.length >= 4) {
       return (
@@ -52,9 +45,13 @@ function renderInlineTokens(text: string) {
       );
     }
     if ((tok.startsWith('"') && tok.endsWith('"')) || (tok.startsWith('“') && tok.endsWith('”'))) {
+      const quote = tok.slice(1, -1);
       return (
-        <span key={i} className="italic font-serif text-lavender-dark dark:text-lavender-light bg-lavender/10 dark:bg-lavender/20 px-1.5 py-0.5 rounded text-[13px] mx-0.5 inline-block">
-          “{tok.slice(1, -1)}”
+        <span
+          key={i}
+          className="italic font-serif text-lavender-dark dark:text-lavender-light bg-lavender/10 dark:bg-lavender/20 px-1.5 py-0.5 rounded text-[13px] mx-0.5 inline-block"
+        >
+          “{quote}”
         </span>
       );
     }
@@ -64,16 +61,20 @@ function renderInlineTokens(text: string) {
 
 const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
   const blocks = text.split(/\n\s*\n/).filter((b) => b.trim());
+
   return (
-    <div className="space-y-4 text-sm text-text-primary dark:text-dark-text leading-relaxed">
+    <div className="space-y-3.5 text-sm text-text-primary dark:text-dark-text leading-relaxed">
       {blocks.map((block, idx) => {
         const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+
+        // Header detection: e.g. "**Observation**:" or "1. **What Went Well**:"
         const headerMatch = block.match(/^(\d+\.\s*)?\*\*(.*?)\*\*[:\s]*/);
         if (headerMatch) {
           const title = headerMatch[2];
           const remaining = block.slice(headerMatch[0].length).trim();
+
           return (
-            <div key={idx} className="space-y-1.5 pt-1.5">
+            <div key={idx} className="space-y-1.5 pt-1">
               <div className="font-bold text-xs uppercase tracking-wider text-lavender flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-lavender inline-block" />
                 {title}
@@ -89,13 +90,19 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
                         </div>
                       );
                     }
-                    return <p key={lIdx} className="leading-relaxed">{renderInlineTokens(l)}</p>;
+                    return (
+                      <p key={lIdx} className="leading-relaxed">
+                        {renderInlineTokens(l)}
+                      </p>
+                    );
                   })}
                 </div>
               )}
             </div>
           );
         }
+
+        // Bulleted lists
         const isList = lines.length > 1 && lines.every((l) => /^(\*|-|•|\d+\.)\s/.test(l));
         if (isList) {
           return (
@@ -103,58 +110,25 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
               {lines.map((l, lIdx) => (
                 <div key={lIdx} className="flex items-start gap-2 text-sm leading-relaxed">
                   <span className="text-lavender font-bold flex-shrink-0">•</span>
-                  <span className="flex-1">{renderInlineTokens(l.replace(/^(\*|-|•)\s+/, ''))}</span>
+                  <span className="flex-1">{renderInlineTokens(l.replace(/^(\*|-|•|\d+\.)\s+/, ''))}</span>
                 </div>
               ))}
             </div>
           );
         }
-        return <p key={idx} className="leading-relaxed">{renderInlineTokens(block)}</p>;
+
+        // Regular paragraph
+        return (
+          <p key={idx} className="leading-relaxed">
+            {renderInlineTokens(block)}
+          </p>
+        );
       })}
     </div>
   );
 };
 
-/* ── Evidence Chip ─────────────────────────────────────────── */
-const EvidenceChip: React.FC<{ evRef: EvidenceRef }> = ({ evRef }) => (
-  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-lavender/10 dark:bg-lavender/20 text-lavender-dark dark:text-lavender-light border border-lavender/20 dark:border-lavender/30">
-    <FileText size={10} />
-    {evRef.date}: {evRef.label}
-  </span>
-);
-
-/* ── Claims List with Evidence Chips ───────────────────────── */
-const ClaimsList: React.FC<{ claims: EvidenceClaim[]; evidenceMap: EvidenceRef[] }> = ({ claims, evidenceMap }) => {
-  if (!claims.length) return null;
-  const evidenceById = useMemo(() => {
-    const map = new Map<string, EvidenceRef>();
-    for (const e of evidenceMap) map.set(e.id, e);
-    return map;
-  }, [evidenceMap]);
-
-  return (
-    <div className="space-y-3 pt-3 border-t border-border/40 dark:border-dark-border/40">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted dark:text-dark-text-muted flex items-center gap-1">
-        <Shield size={10} /> Grounded Observations
-      </p>
-      {claims.map((claim, idx) => (
-        <div key={idx} className="space-y-1.5">
-          <p className="text-xs text-text-primary dark:text-dark-text leading-relaxed">
-            {renderInlineTokens(claim.text)}
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {claim.evidenceIds.map((eid) => {
-              const ref = evidenceById.get(eid);
-              return ref ? <EvidenceChip key={eid} evRef={ref} /> : null;
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-/* ── Calendar Range Picker (Hotel-Booking Style) ───────────── */
+/* ── Calendar Range Picker Modal ───────────────────────────── */
 const CalendarRangePicker: React.FC<{
   startDate: Date | null;
   endDate: Date | null;
@@ -208,7 +182,7 @@ const CalendarRangePicker: React.FC<{
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-text-primary dark:text-dark-text flex items-center gap-2">
             <Calendar size={16} className="text-lavender" />
-            Select Date Range
+            Filter by Date Range
           </h3>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-border/30 dark:hover:bg-dark-border/30 transition-colors">
             <X size={16} className="text-text-muted" />
@@ -289,7 +263,7 @@ const CalendarRangePicker: React.FC<{
               }
             }}
           >
-            Apply Range
+            Apply Filter
           </button>
         </div>
       </div>
@@ -297,243 +271,296 @@ const CalendarRangePicker: React.FC<{
   );
 };
 
-/* ── Main Insights Page ────────────────────────────────────── */
+/* ── Main Insights Page Component ──────────────────────────── */
 export const InsightsPage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
-  const [question, setQuestion] = useState('');
-  const [activeQuestion, setActiveQuestion] = useState('');
-  const [result, setResult] = useState<GroundedInsightResponse | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputQuestion, setInputQuestion] = useState('');
   const [loading, setLoading] = useState(false);
-  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+  const [activePreset, setActivePreset] = useState<RangePreset>('all');
   const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
-  const executeQuery = useCallback(async (q: string, range: { start: string; end: string }) => {
-    if (!q.trim() || !user) return;
-    setLoading(true);
-    setActiveQuestion(q);
-    setPendingQuestion(null);
-    try {
-      const res = await queryInsights(user.id, q, range);
-      setResult(res);
-    } catch (err) {
-      setResult({
-        type: 'error',
-        summary: 'Something went wrong while reflecting on your data. Please try again.',
-        dateRange: range,
-        stats: {},
-        claims: [],
-        evidenceMap: [],
-        limitations: 'Unexpected error.',
-        isFallback: true,
-      });
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      scrollToBottom();
     }
-    setLoading(false);
-  }, [user]);
+  }, [messages, loading]);
 
-  const handleSend = useCallback((q: string) => {
-    if (!q.trim()) return;
-    setQuestion(q);
-    setResult(null);
+  const currentRange = useMemo(() => {
+    if (activePreset === 'custom' && customRange) return customRange;
+    return getPresetRange(activePreset);
+  }, [activePreset, customRange]);
 
-    // 1. Check if question contains explicit date/range
-    if (hasExplicitDate(q)) {
-      const parsed = parseDateRange(q);
-      executeQuery(q, parsed);
-    } else {
-      // 2. Ask user to choose a timeframe first!
-      setPendingQuestion(q);
-    }
-  }, [executeQuery]);
+  const sendMessage = useCallback(
+    async (textToSend: string) => {
+      if (!textToSend.trim() || !user || loading) return;
 
-  const handleTimeframeChoice = (preset: RangePreset) => {
+      const userMsg: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        text: textToSend.trim(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+
+      const updatedHistory = [...messages, userMsg];
+      setMessages(updatedHistory);
+      setInputQuestion('');
+      setLoading(true);
+
+      // Build chat history turns for companion memory
+      const historyForApi = updatedHistory.map((m) => ({
+        role: m.role,
+        text: m.text,
+      }));
+
+      try {
+        const res = await queryInsights(user.id, textToSend.trim(), currentRange, historyForApi);
+
+        const aiMsg: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          role: 'assistant',
+          text: res.text,
+          dateRange: res.dateRange,
+          entryCount: res.entryCount,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        setMessages((prev) => [...prev, aiMsg]);
+      } catch (err) {
+        const errorMsg: ChatMessage = {
+          id: `err-${Date.now()}`,
+          role: 'assistant',
+          text: 'I ran into an unexpected hiccup while reading your journal. Please feel free to ask again or rephrase!',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+      }
+
+      setLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    },
+    [user, loading, messages, currentRange]
+  );
+
+  const handleClearThread = () => {
+    setMessages([]);
+    setInputQuestion('');
+  };
+
+  const handlePresetClick = (preset: RangePreset) => {
     if (preset === 'custom') {
       setShowCalendar(true);
     } else {
-      const range = getPresetRange(preset);
-      if (range && pendingQuestion) {
-        executeQuery(pendingQuestion, range);
-      }
+      setActivePreset(preset);
+      setCustomRange(null);
     }
   };
 
   const handleCalendarSelect = (start: Date, end: Date) => {
-    const range = { start: format(start, 'yyyy-MM-dd'), end: format(end, 'yyyy-MM-dd') };
-    setCustomRange(range);
+    setCustomRange({ start: format(start, 'yyyy-MM-dd'), end: format(end, 'yyyy-MM-dd') });
+    setActivePreset('custom');
     setShowCalendar(false);
-    if (pendingQuestion) {
-      executeQuery(pendingQuestion, range);
-    }
   };
 
+  const presets: { key: RangePreset; label: string; icon: string }[] = [
+    { key: 'all', label: 'All Time (Default)', icon: '✨' },
+    { key: 'last7', label: 'Last 7 days', icon: '⚡' },
+    { key: 'last30', label: 'Last 30 days', icon: '📅' },
+    { key: 'thisMonth', label: 'This month', icon: '🌙' },
+    { key: 'custom', label: 'Custom range', icon: '🗓️' },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-extrabold text-text-primary dark:text-dark-text">
-          <Sparkles size={24} className="inline mr-2 text-lavender" />
-          Insights & Reflections
-        </h1>
-        <p className="text-sm text-text-secondary dark:text-dark-text-secondary mt-1">
-          A gentle, private reflection on your habits, thoughts, and daily rhythm.
-        </p>
-      </div>
+    <div className="space-y-6 max-w-3xl mx-auto pb-8">
+      {/* Page Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold text-text-primary dark:text-dark-text flex items-center gap-2">
+            <Sparkles size={24} className="text-lavender animate-pulse" />
+            Insights & Reflection Companion
+          </h1>
+          <p className="text-sm text-text-secondary dark:text-dark-text-secondary mt-1">
+            An ongoing, intimate conversation reflecting on your daily thoughts, habits, and growth.
+          </p>
+        </div>
 
-      {/* Suggested questions */}
-      <div className="flex flex-wrap gap-2">
-        {SUGGESTED_QUESTIONS.map((sq) => (
+        {messages.length > 0 && (
           <button
-            key={sq}
-            className="btn-secondary text-sm py-2 px-3 tap-spring"
-            onClick={() => handleSend(sq)}
-            disabled={loading}
+            type="button"
+            onClick={handleClearThread}
+            className="flex items-center gap-1.5 text-xs text-text-muted hover:text-lavender font-medium px-3 py-1.5 rounded-xl border border-border/40 hover:border-lavender/40 transition-all bg-surface/50 dark:bg-dark-surface/50"
+            title="Start a fresh conversation"
           >
-            {sq}
+            <RotateCcw size={13} />
+            <span>New Chat</span>
           </button>
-        ))}
+        )}
       </div>
 
-      {/* Custom question input */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          className="input-field flex-1"
-          placeholder="Ask anything about your journal entries (e.g. brain dump on 1st September)..."
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend(question)}
-        />
-        <button
-          className="btn-primary px-4 tap-spring"
-          onClick={() => handleSend(question)}
-          disabled={loading || !question.trim()}
-        >
-          {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-        </button>
+      {/* Optional Timeline Filter Bar */}
+      <div className="space-y-1.5 bg-surface/40 dark:bg-dark-surface/40 border border-border/40 dark:border-dark-border/40 rounded-2xl p-3">
+        <div className="flex items-center justify-between text-[11px] text-text-muted dark:text-dark-text-muted font-medium">
+          <span className="flex items-center gap-1">
+            <Clock size={12} className="text-lavender" />
+            Optional timeline filter (defaults to all entries):
+          </span>
+          {currentRange && (
+            <span className="text-lavender font-semibold text-[11px]">
+              Active: {currentRange.start} → {currentRange.end}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-1.5 pt-0.5">
+          {presets.map(({ key, label, icon }) => (
+            <button
+              key={key}
+              type="button"
+              className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-all tap-spring ${
+                activePreset === key
+                  ? 'bg-lavender text-white border-lavender shadow-xs'
+                  : 'bg-white/80 dark:bg-dark-card/80 text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border/40 hover:border-lavender/40'
+              }`}
+              onClick={() => handlePresetClick(key)}
+            >
+              {icon} {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Timeframe Selector Prompt (Appears ONLY when question lacks explicit date) */}
-      {pendingQuestion && !loading && (
-        <div className="card fade-in border-lavender/30 dark:border-lavender/20 bg-lavender/5 dark:bg-lavender/10 space-y-3">
-          <div className="flex items-center gap-2 text-xs font-bold text-lavender-dark dark:text-lavender-light">
-            <Clock size={14} />
-            <span>Which timeframe would you like to analyze for "{pendingQuestion}"?</span>
-          </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <button
-              type="button"
-              className="btn-secondary text-xs py-2 px-3 tap-spring"
-              onClick={() => handleTimeframeChoice('last7')}
+      {/* Conversation Thread */}
+      {messages.length > 0 && (
+        <div className="space-y-4 pt-1">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`fade-in flex gap-3 ${
+                msg.role === 'user' ? 'justify-end' : 'justify-start'
+              }`}
             >
-              ⚡ Last 7 days
-            </button>
-            <button
-              type="button"
-              className="btn-secondary text-xs py-2 px-3 tap-spring"
-              onClick={() => handleTimeframeChoice('last30')}
-            >
-              📅 Last 30 days
-            </button>
-            <button
-              type="button"
-              className="btn-secondary text-xs py-2 px-3 tap-spring"
-              onClick={() => handleTimeframeChoice('thisMonth')}
-            >
-              🌙 This month
-            </button>
-            <button
-              type="button"
-              className="btn-secondary text-xs py-2 px-3 tap-spring border-lavender/40 text-lavender-dark dark:text-lavender-light"
-              onClick={() => handleTimeframeChoice('custom')}
-            >
-              🗓️ Custom range...
-            </button>
+              {/* Companion Avatar */}
+              {msg.role === 'assistant' && (
+                <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-lavender to-blue-soft flex items-center justify-center shrink-0 shadow-sm mt-1">
+                  <HeartHandshake size={18} className="text-white" />
+                </div>
+              )}
+
+              {/* Message Bubble */}
+              <div
+                className={`max-w-[88%] rounded-3xl p-4 sm:p-5 shadow-xs transition-all ${
+                  msg.role === 'user'
+                    ? 'bg-lavender text-white rounded-br-md font-medium text-sm leading-relaxed shadow-sm ml-8'
+                    : 'bg-white dark:bg-dark-card border border-border/80 dark:border-dark-border text-text-primary dark:text-dark-text rounded-bl-md space-y-3 mr-8'
+                }`}
+              >
+                {msg.role === 'user' ? (
+                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                ) : (
+                  <>
+                    <FormattedInsightText text={msg.text} />
+                    {msg.dateRange?.start && (
+                      <div className="pt-2 border-t border-border/30 dark:border-dark-border/30 flex items-center justify-between text-[11px] text-text-muted dark:text-dark-text-muted">
+                        <span>
+                          📅 Reflecting on {msg.dateRange.start === msg.dateRange.end ? msg.dateRange.start : `${msg.dateRange.start} to ${msg.dateRange.end}`}
+                          {msg.entryCount ? ` (${msg.entryCount} ${msg.entryCount === 1 ? 'entry' : 'entries'})` : ''}
+                        </span>
+                        <span className="text-[10px] opacity-75">{msg.timestamp}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* User Avatar */}
+              {msg.role === 'user' && (
+                <div className="w-9 h-9 rounded-2xl bg-surface dark:bg-dark-surface border border-border/60 dark:border-dark-border flex items-center justify-center shrink-0 shadow-xs mt-1">
+                  <User size={16} className="text-text-secondary dark:text-dark-text-secondary" />
+                </div>
+              )}
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+      )}
+
+      {/* Suggested Starters (Shown when thread is empty) */}
+      {messages.length === 0 && !loading && (
+        <div className="space-y-3 pt-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted flex items-center gap-1.5">
+            <MessageSquare size={13} className="text-lavender" />
+            Suggested Reflection Starters
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {SUGGESTED_QUESTIONS.map((sq) => (
+              <button
+                key={sq}
+                type="button"
+                className="btn-secondary text-left text-xs py-3 px-3.5 tap-spring rounded-2xl border-border/60 hover:border-lavender/50 hover:bg-lavender/5 transition-all flex items-center justify-between group"
+                onClick={() => sendMessage(sq)}
+                disabled={loading}
+              >
+                <span>{sq}</span>
+                <Sparkles size={13} className="text-lavender opacity-40 group-hover:opacity-100 shrink-0 ml-2" />
+              </button>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Loading State */}
+      {/* AI Companion Thinking Loading State */}
       {loading && (
-        <div className="card">
+        <div className="card fade-in">
           <AIThinkingCompanion />
         </div>
       )}
 
-      {/* Result Card */}
-      {!loading && result && (
-        <div className="card fade-in space-y-4">
-          <div className="flex items-start gap-3.5">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${
-              result.type === 'error' || result.type === 'rate-limited'
-                ? 'bg-gradient-to-br from-amber-400 to-orange-400'
-                : 'bg-gradient-to-br from-lavender to-blue-soft'
-            }`}>
-              {result.type === 'error' || result.type === 'rate-limited'
-                ? <AlertTriangle size={20} className="text-white" />
-                : <HeartHandshake size={20} className="text-white" />
+      {/* Input Form Bar */}
+      <div className="sticky bottom-4 z-20 pt-2">
+        <div className="flex gap-2 bg-white/90 dark:bg-dark-card/90 backdrop-blur-md p-2 rounded-3xl border border-border/80 dark:border-dark-border shadow-lg">
+          <input
+            ref={inputRef}
+            type="text"
+            className="input-field flex-1 border-none shadow-none focus:ring-0 bg-transparent px-3 text-sm"
+            placeholder={
+              messages.length > 0
+                ? "Ask a follow-up or cross-question (e.g. 'how about my water intake?')..."
+                : "Ask anything about your journal (e.g. 'what do you make of my brain dump on 1st Sept')..."
+            }
+            value={inputQuestion}
+            onChange={(e) => setInputQuestion(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage(inputQuestion);
               }
-            </div>
-
-            <div className="flex-1 min-w-0 space-y-3">
-              {/* Question title */}
-              {activeQuestion && (
-                <p className="text-xs font-bold text-lavender-dark dark:text-lavender-light">
-                  Q: "{activeQuestion}"
-                </p>
-              )}
-
-              {/* Status badges for special states */}
-              {result.type === 'rate-limited' && (
-                <div className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                  <Info size={10} /> Daily Limit Reached (10/day)
-                </div>
-              )}
-
-              {/* Formatted Summary / Answer */}
-              {result.type === 'insufficient-data' ? (
-                <div className="text-text-secondary dark:text-dark-text-secondary space-y-2">
-                  <p className="text-sm leading-relaxed whitespace-pre-line">{result.summary}</p>
-                </div>
-              ) : (
-                <FormattedInsightText text={result.summary} />
-              )}
-
-              {/* Grounded Claims / Citations */}
-              {result.claims.length > 0 && (
-                <ClaimsList claims={result.claims} evidenceMap={result.evidenceMap} />
-              )}
-
-              {/* Date range footer */}
-              {result.dateRange?.start && (
-                <div className="pt-3 border-t border-border/40 dark:border-dark-border/40 flex items-center justify-between text-xs text-text-muted dark:text-dark-text-muted">
-                  <span>
-                    📅 Based on entries from <strong className="font-semibold text-text-primary dark:text-dark-text">{result.dateRange.start}</strong> to <strong className="font-semibold text-text-primary dark:text-dark-text">{result.dateRange.end}</strong>
-                    {result.stats?.entryCount != null && ` (${result.stats.entryCount} ${result.stats.entryCount === 1 ? 'entry' : 'entries'})`}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Medical Disclaimer */}
-          <p className="text-[11px] text-text-muted dark:text-dark-text-muted pt-2 border-t border-border/40 dark:border-dark-border/40 italic">
-            ℹ️ Insights are based only on your saved entries and are not medical advice.
-          </p>
+            }}
+            disabled={loading}
+          />
+          <button
+            type="button"
+            className="btn-primary rounded-2xl px-4 py-2.5 tap-spring flex items-center justify-center shrink-0"
+            onClick={() => sendMessage(inputQuestion)}
+            disabled={loading || !inputQuestion.trim()}
+          >
+            {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+          </button>
         </div>
-      )}
+      </div>
 
-      {/* Empty State (initial load) */}
-      {!result && !loading && !pendingQuestion && (
-        <div className="text-center py-12 text-text-muted dark:text-dark-text-muted">
-          <Sparkles size={32} className="mx-auto mb-3 opacity-30 text-lavender" />
-          <p className="font-semibold text-text-primary dark:text-dark-text">Ask a question above or choose a suggested topic</p>
-          <p className="text-xs mt-1">
-            Every reflection is grounded directly in your personal journal logs.
-          </p>
-        </div>
-      )}
+      {/* Medical Disclaimer Footnote */}
+      <p className="text-[11px] text-center text-text-muted dark:text-dark-text-muted italic pt-2">
+        🌸 Mewwmory reflections are heartfelt personal observations based on your private journal logs, not medical advice.
+      </p>
 
-      {/* Calendar Modal */}
+      {/* Calendar Range Modal */}
       {showCalendar && (
         <CalendarRangePicker
           startDate={customRange ? parse(customRange.start, 'yyyy-MM-dd', new Date()) : null}

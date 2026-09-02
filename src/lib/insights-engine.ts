@@ -3,96 +3,107 @@ import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 
 /* ===== Types ===== */
 
-export interface EvidenceClaim {
-  text: string;
-  evidenceIds: string[];
-}
-
-export interface EvidenceRef {
+export interface ChatMessage {
   id: string;
-  date: string;
-  label: string;
+  role: 'user' | 'assistant';
+  text: string;
+  dateRange?: { start: string; end: string };
+  entryCount?: number;
+  timestamp: string;
 }
 
 export interface GroundedInsightResponse {
-  type: 'ai-grounded' | 'fallback' | 'insufficient-data' | 'rate-limited' | 'error';
-  summary: string;
-  dateRange: { start: string; end: string };
-  stats: Record<string, any>;
-  claims: EvidenceClaim[];
-  evidenceMap: EvidenceRef[];
-  limitations: string;
-  isFallback: boolean;
+  type: 'success' | 'insufficient-data' | 'rate-limited' | 'off-topic' | 'error';
+  text: string;
+  dateRange?: { start: string; end: string };
+  entryCount?: number;
 }
 
-/* ===== Main query handler ===== */
+/* ===== Main query handler with Multi-Turn Conversational History ===== */
 
 export async function queryInsights(
-  _userId: string, // not used for auth — Edge Function verifies JWT
+  _userId: string,
   question: string,
-  dateRange?: { start: string; end: string },
+  dateRange?: { start: string; end: string } | null,
+  history: Array<{ role: 'user' | 'assistant'; text: string }> = [],
 ): Promise<GroundedInsightResponse> {
-  // If no date range provided, parse from the question text
-  const range = dateRange || parseDateRange(question);
+  // If no date range provided, check if the question mentions a specific date
+  let range = dateRange;
+  if (!range && hasExplicitDate(question)) {
+    range = parseDateRange(question);
+  }
 
   try {
+    const formattedHistory = history.map((h) => ({
+      role: h.role === 'assistant' ? 'model' : 'user',
+      text: h.text,
+    }));
+
     const { data, error } = await supabase.functions.invoke('generate-insight', {
-      body: { question, startDate: range.start, endDate: range.end },
+      body: {
+        question,
+        startDate: range?.start || 'all',
+        endDate: range?.end || 'all',
+        history: formattedHistory,
+      },
     });
 
     if (error) {
       console.error('Edge Function invoke error:', error);
       return {
         type: 'error',
-        summary: 'Something went wrong while reflecting on your data. Please try again.',
-        dateRange: range,
-        stats: {},
-        claims: [],
-        evidenceMap: [],
-        limitations: 'Edge Function call failed.',
-        isFallback: true,
+        text: 'Something went wrong while connecting to your companion. Please try again in a moment.',
       };
     }
 
-    if (data && data.summary) {
+    if (data && data.text) {
       return {
-        type: data.type || 'ai-grounded',
-        summary: data.summary,
-        dateRange: data.dateRange || range,
-        stats: data.stats || {},
-        claims: Array.isArray(data.claims) ? data.claims : [],
-        evidenceMap: Array.isArray(data.evidenceMap) ? data.evidenceMap : [],
-        limitations: data.limitations || '',
-        isFallback: !!data.isFallback,
+        type: data.type || 'success',
+        text: data.text,
+        dateRange: data.dateRange,
+        entryCount: data.entryCount,
       };
     }
 
     return {
       type: 'error',
-      summary: 'No insight could be generated. Please try a different question.',
-      dateRange: range,
-      stats: {},
-      claims: [],
-      evidenceMap: [],
-      limitations: 'Empty response from server.',
-      isFallback: true,
+      text: 'I could not generate a reflection for that question. Please try asking in a different way.',
     };
   } catch (err) {
     console.error('Insights query failed:', err);
     return {
       type: 'error',
-      summary: 'Something went wrong while connecting to insights. Please check your internet connection and try again.',
-      dateRange: range,
-      stats: {},
-      claims: [],
-      evidenceMap: [],
-      limitations: 'Network or server error.',
-      isFallback: true,
+      text: 'Could not connect to the reflection engine. Please check your internet connection and try again.',
     };
   }
 }
 
-/* ===== Date range parsing (for natural language in question text) ===== */
+/* ===== Date detection & parsing helpers ===== */
+
+export function hasExplicitDate(question: string): boolean {
+  const q = question.toLowerCase();
+  if (
+    q.includes('today') ||
+    q.includes('yesterday') ||
+    q.includes('last week') ||
+    q.includes('this week') ||
+    q.includes('this month') ||
+    q.includes('last month') ||
+    q.includes('2 weeks') ||
+    q.includes('14 days') ||
+    q.includes('7 days') ||
+    q.includes('30 days')
+  ) {
+    return true;
+  }
+  const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  for (const m of months) {
+    if (q.includes(m)) return true;
+  }
+  if (/\b\d{4}-\d{2}-\d{2}\b/.test(q)) return true;
+  if (/\b\d{1,2}(st|nd|rd|th)?\s+(of\s+)?[a-z]+/i.test(q)) return true;
+  return false;
+}
 
 export function parseDateRange(question: string): { start: string; end: string } {
   const today = new Date();
@@ -114,16 +125,7 @@ export function parseDateRange(question: string): { start: string; end: string }
     return { start: yStr, end: yStr };
   }
 
-  // "last X days" or "past X days"
-  const daysMatch = q.match(/(?:last|past)\s+(\d+)\s+days?/i);
-  if (daysMatch) {
-    const count = parseInt(daysMatch[1], 10);
-    if (count > 0 && count <= 365) {
-      return { start: format(subDays(today, count), 'yyyy-MM-dd'), end: format(today, 'yyyy-MM-dd') };
-    }
-  }
-
-  // Month + day (e.g. "august 2nd", "2nd august")
+  // Month + day (e.g. "1st september", "september 1st", "aug 31")
   for (const [mName, mIdx] of Object.entries(months)) {
     if (q.includes(mName)) {
       const match = q.match(/\b(\d{1,2})(st|nd|rd|th)?\b/);
@@ -152,17 +154,16 @@ export function parseDateRange(question: string): { start: string; end: string }
     return { start: format(subDays(today, 14), 'yyyy-MM-dd'), end: format(today, 'yyyy-MM-dd') };
   }
 
-  // Default: last 30 days
   return { start: format(subDays(today, 30), 'yyyy-MM-dd'), end: format(today, 'yyyy-MM-dd') };
 }
 
-/* ===== Suggested questions ===== */
+/* ===== Suggested starter questions ===== */
 
 export const SUGGESTED_QUESTIONS = [
-  'What makes my mood happy?',
   'What do you make of my recent brain dumps?',
+  'What makes my mood feel happiest?',
   'What things am I most grateful for?',
-  'What is the most important improvement I need to make?',
-  'How do my morning reflections connect to my mood?',
+  'How are my study and work priorities progressing?',
+  'How do my morning intentions connect to my evening mood?',
   'Summarize my progress and achievements.',
 ];
