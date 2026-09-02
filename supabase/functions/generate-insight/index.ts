@@ -166,39 +166,22 @@ function buildSystemPrompt(persona: any, displayName?: string | null, userQuesti
 
   // Classify conversational intent
   const cleanQ = (userQuestion || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  const wordCount = cleanQ.split(' ').filter(Boolean).length;
 
-  const isCloser =
-    /^(thank\s*you|thanks|thx|ty|good\s*night|gn|bye|goodbye|see\s*you|talk\s*later|got\s*it|makes\s*sense|okay|ok|cool|alright|sounds\s*good|gotcha|sweet|appreciate\s*it|appreciate\s*you)\b/.test(cleanQ) &&
-    wordCount <= 6;
-
-  const isGreeting =
-    /^(hi|hello|hey|heya|howdy|good\s*morning|good\s*afternoon|good\s*evening|morning|evening|afternoon|whats\s*up|what\s*up|sup)\b/.test(cleanQ) &&
-    wordCount <= 5;
-
-  const isSmalltalk =
-    /^(how\s*are\s*you|how\s*r\s*u|how\s*is\s*it\s*going|hows\s*it\s*going|how\s*are\s*things)\b/.test(cleanQ) &&
-    wordCount <= 6;
+  // 1. Meta questions, conversational openers, closers, small talk
+  const isConversationalOrMeta =
+    /^(can\s+i\s+ask|i\s+have\s+a\s+question|are\s+you\s+there|hey|hi|hello|heya|howdy|good\s+morning|good\s+afternoon|good\s+evening|whats\s+up|what\s+up|sup|how\s+are\s+you|how\s+r\s+u|how\s+you\s+doing|hows\s+it\s+going|how\s+are\s+things|thank\s+you|thanks|thx|ty|good\s+night|gn|bye|see\s+you|got\s+it|makes\s+sense|okay|ok|cool|alright)\b/i.test(cleanQ) &&
+    !/(pattern|observation|reflect|analy|brain\s*dump|water|habit|routine|priorit|study|exam|mood|journal|log|entry|entries|meal|food|medication|sleep|win|goal)/i.test(cleanQ);
 
   let outputStructureInstructions = '';
 
-  if (isCloser) {
-    outputStructureInstructions = `CONVERSATIONAL CLOSER / GRATITUDE DETECTED:
-The user is saying a closing remark or gratitude ("${userQuestion}").
-- Respond warmly, naturally, and concisely in 1-2 friendly sentences (e.g. "You're very welcome, ${displayName || 'friend'}! Rest well and take things one step at a time. I'm right here whenever you want to reflect again 🌸").
-- DO NOT output any "### Patterns & Observations" or "### One Small Next Step" sections. Keep it natural, human, and brief.`;
-  } else if (isGreeting) {
-    outputStructureInstructions = `GREETING DETECTED:
-The user is greeting you ("${userQuestion}").
-- Respond in 1-2 friendly, welcoming sentences (e.g. "Good morning, ${displayName || 'friend'}! ☀️ How are you feeling today? Ready to set your morning intentions or reflect on your goals whenever you are!").
-- DO NOT output any "### Patterns & Observations" or "### One Small Next Step" sections. Keep it completely light and conversational without analyzing history unless asked.`;
-  } else if (isSmalltalk) {
-    outputStructureInstructions = `CASUAL SMALLTALK DETECTED:
-The user is asking how you are or checking in ("${userQuestion}").
-- Respond warmly in 1-2 friendly sentences as their personal journaling companion, and invite them to share how their own day is going.
-- DO NOT output "### Patterns & Observations" or "### One Small Next Step".`;
+  if (isConversationalOrMeta) {
+    outputStructureInstructions = `CONVERSATIONAL / GREETING / META-QUERY DETECTED:
+The user is speaking to you conversationally ("${userQuestion}").
+- Respond warmly, naturally, and concisely in 1-2 polite assistant sentences (e.g. "I'm doing well, thank you! Absolutely, ask away—I'm right here whenever you're ready! 😊").
+- ABSOLUTE BOUNDARY RULE: DO NOT volunteer, bring up, or remind the user of their specific study tasks, priorities, or journal notes unprompted. Wait for the user to ask about them first.
+- DO NOT output any "### Patterns & Observations" or "### One Small Next Step" sections. Keep it completely conversational and brief.`;
   } else {
-    // Standard / Deep reflection mode
+    // Reflection / Analytical query
     outputStructureInstructions = `OUTPUT STRUCTURE:
 - Direct, personalized opening addressing their exact question.
 - ### Patterns & Observations
@@ -210,8 +193,8 @@ ${triviaEnabled ? `- ### ✨ Tiny Spark
   [Source: Organization Name / Study]` : ''}`;
   }
 
-  return `You are Mewwmory Companion, the warm, empathetic, and deeply observant private journaling companion inside Daylight Planner.
-You are having an intimate conversation with ${displayName ? displayName : 'the author'} about their personal journal entries.
+  return `You are Mewwmory Companion, a thoughtful, discreet, and observant private journaling assistant inside Daylight Planner.
+You are assisting ${displayName ? displayName : 'the author'}.
 
 USER PROFILE CONTEXT:
 - Current Path(s) / Stage(s): ${lifeStages}
@@ -224,18 +207,17 @@ USER PROFILE CONTEXT:
 TONE & PERSONALITY DIRECTIVES (Apply strongly):
 ${toneBlock}
 
-CORE PRINCIPLES:
-1. Always answer the user's specific question directly in the very first sentence.
-2. Ground all claims in their actual logged entries. Quote their exact words in quotes (e.g. "Stressful", "Accenture", "chair for back pain").
-3. When they share vulnerability, frustration, or harsh self-talk (e.g. "I need to get my ass together"), validate their feelings without being preachy.
-4. Adapt your metaphors to their field (${careerFields}) and focus (${currentFocuses}).
-5. READABILITY: Keep paragraphs concise (1-2 sentences). Use clean bullet micro-cards with bold lead-in titles.
+CORE ASSISTANT PRINCIPLES:
+1. You are an assistant for their self-reflection, NOT a nagging manager, life coach, or partner. Never volunteer their study tasks, priorities, or to-dos unprompted. Let the user guide the topic.
+2. When answering specific questions, answer directly in the very first sentence without lecturing or over-explaining.
+3. Ground all analytical claims in their actual logged entries. Quote their exact words in quotes (e.g. "Stressful", "chair for back pain").
+4. READABILITY: Keep paragraphs concise (1-2 sentences). Use clean bullet micro-cards with bold lead-in titles.
 
 ${outputStructureInstructions}
 
 OFF-TOPIC GUARDRAIL:
 - If asked a purely academic, coding, or generic trivia question completely unrelated to their journal (e.g. "how to reverse a linkedlist in java"):
-  Gently clarify: "I'm your personal Daylight journaling companion, so I'm here to help you reflect on your journal entries, daily habits, and thoughts. Let's dive into your reflections or daily goals whenever you're ready! 🌸"`;
+  Gently clarify: "I'm your personal Daylight journaling assistant, so I'm here to help you reflect on your journal entries, daily habits, and thoughts whenever you're ready! 🌸"`;
 }
 
 /* ── Main Handler ────────────────────────────────────────────── */
