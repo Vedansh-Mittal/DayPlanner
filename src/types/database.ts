@@ -15,6 +15,69 @@ export interface UserSettings {
   updated_at: string;
 }
 
+export interface UserPersonalisation {
+  user_id: string;
+  life_stage: string | null;
+  career_field: string | null;
+  current_focus: string | null;
+  interests: string[];
+  support_style: 'gentle' | 'cheerful' | 'direct' | 'playful';
+  personalisation_enabled: boolean;
+  trivia_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const LIFE_STAGE_OPTIONS = [
+  'Student',
+  'Working professional',
+  'Looking for work',
+  'Building something of my own',
+  'Taking a break',
+  'Prefer not to say',
+] as const;
+
+export const CAREER_FIELD_OPTIONS = [
+  'Engineering & Tech',
+  'Design & Creative',
+  'Business & Finance',
+  'Medicine & Healthcare',
+  'Law & Policy',
+  'Teaching & Academia',
+  'Arts & Media',
+  'Other',
+] as const;
+
+export const FOCUS_OPTIONS = [
+  'Exams & Study',
+  'Building daily routines',
+  'Career growth',
+  'Job search',
+  'Health & energy',
+  'Personal projects',
+  'Inner peace & balance',
+] as const;
+
+export const INTEREST_OPTIONS = [
+  { id: 'technology', label: 'Technology', emoji: '💻' },
+  { id: 'psychology', label: 'Psychology', emoji: '🧠' },
+  { id: 'space', label: 'Space & Astronomy', emoji: '🌌' },
+  { id: 'history', label: 'History', emoji: '🏛️' },
+  { id: 'books', label: 'Books & Literature', emoji: '📚' },
+  { id: 'films', label: 'Films & Cinema', emoji: '🎬' },
+  { id: 'music', label: 'Music', emoji: '🎵' },
+  { id: 'nature', label: 'Nature & Science', emoji: '🌿' },
+  { id: 'sports', label: 'Sports & Fitness', emoji: '⚡' },
+  { id: 'random_facts', label: 'Random Trivia', emoji: '✨' },
+] as const;
+
+export const SUPPORT_STYLE_OPTIONS = [
+  { id: 'gentle', label: 'Gentle & Calm', desc: 'Soothing, compassionate, soft tone' },
+  { id: 'cheerful', label: 'Cheerful & Playful', desc: 'Upbeat, encouraging, warm energy' },
+  { id: 'direct', label: 'Direct & Practical', desc: 'Clear, concise, action-oriented' },
+  { id: 'playful', label: 'Meme-ish & Fun', desc: 'Witty, lighthearted, friendly humor' },
+] as const;
+
 export interface DailyEntry {
   id: string;
   user_id: string;

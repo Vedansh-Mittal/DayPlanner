@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserSettings } from '../hooks/useUserSettings';
+import { usePersonalisation } from '../hooks/usePersonalisation';
 import { useAuthStore } from '../stores/auth-store';
 import { useThemeStore, type ThemePreference } from '../stores/theme-store';
 import { supabase } from '../lib/supabase';
@@ -8,15 +9,23 @@ import { getAllTimezones } from '../lib/utils';
 import {
   Settings as SettingsIcon, User, Globe, Clock, Droplets, Bell,
   Palette, LogOut, Trash2, Loader2, Check, Sun, Moon, Monitor,
-  Download, Upload, FileText
+  Download, Upload, FileText, Sparkles, Compass, Target, Lightbulb, Smile, BookOpen, Briefcase
 } from 'lucide-react';
 import { subscribeToPush, unsubscribeFromPush } from '../lib/push';
+import {
+  LIFE_STAGE_OPTIONS,
+  CAREER_FIELD_OPTIONS,
+  FOCUS_OPTIONS,
+  INTEREST_OPTIONS,
+  SUPPORT_STYLE_OPTIONS,
+} from '../types/database';
 
 const timezones = getAllTimezones();
 
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { settings, updateSettings, loading: settingsLoading } = useUserSettings();
+  const { personalisation, updatePersonalisation, loading: personaLoading } = usePersonalisation();
   const signOut = useAuthStore((s) => s.signOut);
   const user = useAuthStore((s) => s.user);
   const { preference: themePref, setPreference: setThemePref } = useThemeStore();
@@ -33,6 +42,17 @@ export const SettingsPage: React.FC = () => {
   const [emailReminders, setEmailReminders] = useState(settings?.email_reminders || false);
   const [pushRemindersEnabled, setPushRemindersEnabled] = useState(settings?.push_reminders_enabled || false);
   const [hasInitialized, setHasInitialized] = useState(false);
+
+  // Personalisation states
+  const [lifeStage, setLifeStage] = useState<string | null>(null);
+  const [careerField, setCareerField] = useState<string>('');
+  const [customField, setCustomField] = useState<string>('');
+  const [currentFocus, setCurrentFocus] = useState<string | null>(null);
+  const [interests, setInterests] = useState<string[]>([]);
+  const [supportStyle, setSupportStyle] = useState<'gentle' | 'cheerful' | 'direct' | 'playful'>('gentle');
+  const [personalisationEnabled, setPersonalisationEnabled] = useState<boolean>(true);
+  const [triviaEnabled, setTriviaEnabled] = useState<boolean>(true);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
@@ -262,8 +282,8 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  // Sync local state when settings load
-  React.useEffect(() => {
+  // Sync local state when settings and personalisation load
+  useEffect(() => {
     if (settings && !hasInitialized) {
       setDisplayName(settings.display_name || '');
       setTimezone(settings.timezone);
@@ -276,6 +296,25 @@ export const SettingsPage: React.FC = () => {
     }
   }, [settings, hasInitialized]);
 
+  useEffect(() => {
+    if (personalisation) {
+      setLifeStage(personalisation.life_stage);
+      if (personalisation.career_field) {
+        if (CAREER_FIELD_OPTIONS.includes(personalisation.career_field as any)) {
+          setCareerField(personalisation.career_field);
+        } else {
+          setCareerField('Other');
+          setCustomField(personalisation.career_field);
+        }
+      }
+      setCurrentFocus(personalisation.current_focus);
+      setInterests(personalisation.interests || []);
+      setSupportStyle(personalisation.support_style || 'gentle');
+      setPersonalisationEnabled(personalisation.personalisation_enabled !== false);
+      setTriviaEnabled(personalisation.trivia_enabled !== false);
+    }
+  }, [personalisation]);
+
   const filteredTz = tzSearch
     ? timezones.filter((tz) => tz.label.toLowerCase().includes(tzSearch.toLowerCase()))
     : timezones;
@@ -284,19 +323,31 @@ export const SettingsPage: React.FC = () => {
     setSaving(true);
     setSaved(false);
     try {
-      await updateSettings({
-        display_name: displayName || null,
-        timezone,
-        morning_reminder: morningReminder,
-        night_reminder: nightReminder,
-        water_goal: waterGoal,
-        email_reminders: emailReminders,
-        push_reminders_enabled: pushRemindersEnabled,
-      });
+      const finalCareer = careerField === 'Other' ? (customField.trim() || 'Other') : careerField;
+      await Promise.all([
+        updateSettings({
+          display_name: displayName || null,
+          timezone,
+          morning_reminder: morningReminder,
+          night_reminder: nightReminder,
+          water_goal: waterGoal,
+          email_reminders: emailReminders,
+          push_reminders_enabled: pushRemindersEnabled,
+        }),
+        updatePersonalisation({
+          life_stage: lifeStage,
+          career_field: finalCareer || null,
+          current_focus: currentFocus,
+          interests,
+          support_style: supportStyle,
+          personalisation_enabled: personalisationEnabled,
+          trivia_enabled: triviaEnabled,
+        }),
+      ]);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {
-      // error handled by hook
+    } catch (e) {
+      console.error('Save error:', e);
     }
     setSaving(false);
   };
@@ -424,6 +475,199 @@ export const SettingsPage: React.FC = () => {
             </div>
           )}
         </div>
+      </section>
+
+      {/* ✨ AI Reflection & Personalisation */}
+      <section className="card space-y-6 border-lavender/30 dark:border-lavender/20">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="section-title text-lavender flex items-center gap-2">
+              <Sparkles size={18} className="text-lavender" />
+              AI Reflection & Personalisation
+            </h2>
+            <p className="text-xs text-text-secondary dark:text-dark-text-secondary mt-1">
+              Help Mewd understand your path and tailor encouragement to your real journey. (All fields are optional).
+            </p>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <span className="text-xs font-semibold text-text-muted">Enabled</span>
+            <input
+              type="checkbox"
+              className="toggle"
+              checked={personalisationEnabled}
+              onChange={(e) => setPersonalisationEnabled(e.target.checked)}
+            />
+          </label>
+        </div>
+
+        {personalisationEnabled && (
+          <div className="space-y-5 pt-1">
+            {/* Current Path */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center gap-1.5">
+                <Compass size={13} className="text-lavender" />
+                Current Path / Stage
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {LIFE_STAGE_OPTIONS.map((stage) => (
+                  <button
+                    key={stage}
+                    type="button"
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring ${
+                      lifeStage === stage
+                        ? 'bg-lavender text-white border-lavender shadow-xs'
+                        : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
+                    }`}
+                    onClick={() => setLifeStage(lifeStage === stage ? null : stage)}
+                  >
+                    {stage}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Field / Area */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center gap-1.5">
+                <Briefcase size={13} className="text-lavender" />
+                Field / Area of Focus
+              </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {CAREER_FIELD_OPTIONS.map((field) => (
+                  <button
+                    key={field}
+                    type="button"
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring ${
+                      careerField === field
+                        ? 'bg-lavender text-white border-lavender shadow-xs'
+                        : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
+                    }`}
+                    onClick={() => setCareerField(careerField === field ? '' : field)}
+                  >
+                    {field}
+                  </button>
+                ))}
+              </div>
+              {careerField === 'Other' && (
+                <input
+                  type="text"
+                  className="input-field text-xs py-2"
+                  placeholder="Specify your field (e.g. Mechanical Engineering, Content Creation...)"
+                  value={customField}
+                  onChange={(e) => setCustomField(e.target.value)}
+                />
+              )}
+            </div>
+
+            {/* Current Focus */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center gap-1.5">
+                <Target size={13} className="text-lavender" />
+                Primary Goal / Focus Right Now
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {FOCUS_OPTIONS.map((foc) => (
+                  <button
+                    key={foc}
+                    type="button"
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring ${
+                      currentFocus === foc
+                        ? 'bg-lavender text-white border-lavender shadow-xs'
+                        : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
+                    }`}
+                    onClick={() => setCurrentFocus(currentFocus === foc ? null : foc)}
+                  >
+                    {foc}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Preferred Support Style */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center gap-1.5">
+                <Smile size={13} className="text-lavender" />
+                Companion Tone & Style
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {SUPPORT_STYLE_OPTIONS.map((sty) => (
+                  <button
+                    key={sty.id}
+                    type="button"
+                    className={`text-left p-3 rounded-2xl border transition-all tap-spring ${
+                      supportStyle === sty.id
+                        ? 'bg-lavender/10 dark:bg-lavender/20 border-lavender shadow-xs'
+                        : 'bg-surface dark:bg-dark-surface border-border/40 dark:border-dark-border hover:border-lavender/40'
+                    }`}
+                    onClick={() => setSupportStyle(sty.id as any)}
+                  >
+                    <div className="text-xs font-bold text-text-primary dark:text-dark-text">
+                      {sty.label}
+                    </div>
+                    <div className="text-[11px] text-text-muted dark:text-dark-text-muted mt-0.5">
+                      {sty.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tiny Sparks & Interests */}
+            <div className="pt-3 border-t border-border/40 dark:border-dark-border/40 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-bold text-text-primary dark:text-dark-text flex items-center gap-1.5">
+                    <Lightbulb size={13} className="text-amber-500" />
+                    Include "Tiny Sparks" (Sourced Science & Trivia)
+                  </label>
+                  <p className="text-[11px] text-text-muted dark:text-dark-text-muted">
+                    Adds a short, fascinating sourced fact or psychological principle at the end of reflections.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="toggle"
+                  checked={triviaEnabled}
+                  onChange={(e) => setTriviaEnabled(e.target.checked)}
+                />
+              </div>
+
+              {triviaEnabled && (
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted mb-2">
+                    Pick your favorite spark topics:
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {INTEREST_OPTIONS.map((item) => {
+                      const isSelected = interests.includes(item.id);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={`text-xs font-medium px-3 py-1.5 rounded-xl border transition-all tap-spring flex items-center gap-1.5 ${
+                            isSelected
+                              ? 'bg-lavender text-white border-lavender shadow-xs font-bold'
+                              : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
+                          }`}
+                          onClick={() => {
+                            if (isSelected) {
+                              setInterests(interests.filter((id) => id !== item.id));
+                            } else {
+                              setInterests([...interests, item.id]);
+                            }
+                          }}
+                        >
+                          <span>{item.emoji}</span>
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Reminders */}

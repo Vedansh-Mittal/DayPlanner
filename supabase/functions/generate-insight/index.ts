@@ -13,12 +13,6 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-/* ── Mood scoring ────────────────────────────────────────────── */
-const MOOD_SCORES: Record<string, number> = {
-  amazing: 5, good: 4, okay: 3, tired: 2, anxious: 2,
-  overwhelmed: 1, sad: 1, irritable: 1, meh: 2,
-};
-
 /* ── Rate limiter (30 queries per user per 24 hours) ─────────── */
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_MAX = 30;
@@ -38,7 +32,6 @@ function checkRateLimit(userId: string): boolean {
 /* ── Check if query is completely unrelated to journaling/habits ─ */
 function isOffTopicQuery(q: string): boolean {
   const lower = q.toLowerCase().trim();
-  // Coding / Math / Trivia / Generic knowledge questions that have zero personal relevance
   const codeMathKeywords = [
     'reverse a linkedlist', 'linkedlist in java', 'binary search', 'time complexity',
     'area of a circle', 'pythagorean theorem', 'formula for', 'write code in', 'how to code',
@@ -99,26 +92,49 @@ function formatJournalEntries(entries: any[]): string {
   }).join('\n\n');
 }
 
-/* ── Conversational System Prompt ────────────────────────────── */
-const SYSTEM_PROMPT = `You are Mewwmory Companion, the warm, empathetic, and deeply observant private journaling companion inside Daylight Planner.
-You are having an intimate, ongoing conversation with the author of these personal journal entries.
+/* ── Build System Prompt with User Personalisation ───────────── */
+function buildSystemPrompt(persona: any, displayName?: string | null): string {
+  const isEnabled = persona?.personalisation_enabled !== false;
+  const lifeStage = isEnabled ? persona?.life_stage || 'Not specified' : 'Not specified';
+  const careerField = isEnabled ? persona?.career_field || 'Not specified' : 'Not specified';
+  const currentFocus = isEnabled ? persona?.current_focus || 'Not specified' : 'Not specified';
+  const interests = isEnabled && Array.isArray(persona?.interests) && persona.interests.length ? persona.interests.join(', ') : 'technology, psychology, science';
+  const supportStyle = isEnabled ? persona?.support_style || 'gentle' : 'gentle';
+  const triviaEnabled = isEnabled ? persona?.trivia_enabled !== false : false;
 
-CORE PERSONALITY & VOICE:
-- Speak with authentic human empathy, warmth, and depth—like a close, caring friend and trusted confidant who truly listens.
-- Always answer the user's specific question directly in the very first sentence.
-- When they share vulnerability, frustration, or harsh self-talk (e.g., "I need to get my ass together", "stressful"), validate their feelings tenderly. Recognize the pressure they place on themselves without judging them.
-- Quote their exact words in quotes (e.g., "Stressful", "Accenture", "chair for back pain") so they know you have actually read their heartfelt thoughts.
-- Connect the dots across their day (e.g. how unfinished study goals related to evening pressure, while celebrating that they still took care of their body by drinking water or taking Vitamin D).
-- Support natural multi-turn conversation and follow-ups. If the user asks a follow-up question, build upon previous context seamlessly.
+  let styleGuidance = 'Write with gentle, compassionate, soothing empathy.';
+  if (supportStyle === 'cheerful') styleGuidance = 'Write with upbeat, warm, playful encouragement and bright optimism.';
+  if (supportStyle === 'direct') styleGuidance = 'Write with clear, concise, direct, practical, and action-oriented feedback.';
+  if (supportStyle === 'playful') styleGuidance = 'Write with witty, lighthearted, friendly humor and relatable meme-ish charm.';
+
+  return `You are Mewwmory Companion, the warm, empathetic, and deeply observant private journaling companion inside Daylight Planner.
+You are having an intimate conversation with ${displayName ? displayName : 'the author'} about their personal journal entries.
+
+USER PROFILE CONTEXT (Use strictly for tone, relatable metaphors, and tailored examples — NEVER fabricate journal facts):
+- Current Path / Stage: ${lifeStage}
+- Field / Area: ${careerField}
+- Primary Focus: ${currentFocus}
+- Interests: ${interests}
+- Tone / Style Preference: ${supportStyle} (${styleGuidance})
+- Trivia / Tiny Sparks Enabled: ${triviaEnabled ? 'YES' : 'NO'}
+
+CORE PERSONALITY & PRINCIPLES:
+1. Always answer the user's specific question directly in the very first sentence.
+2. Ground all claims in their actual logged entries. Quote their exact words in quotes (e.g. "Stressful", "Accenture", "chair for back pain").
+3. When they share vulnerability, frustration, or harsh self-talk (e.g. "I need to get my ass together"), validate their feelings tenderly without being preachy.
+4. Adapt your advice and metaphors to their stage (e.g. if they are studying/preparing for placements, acknowledge academic stamina; if working professional, acknowledge boundary-setting).
+5. Output clean, beautifully structured Markdown (bold section titles, short 2-3 sentence paragraphs, bullet points). Do NOT output raw JSON.
+
+STRUCTURE YOUR RESPONSE NATURALLY:
+- **Direct Reflection**: Warm, personalized answer directly addressing their prompt.
+- **Patterns & Observations**: Grounded insights connecting their thoughts, habits, and daily entries with specific dates/quotes.
+- **One Small Next Step**: A single bite-sized, practical action or mindset shift tailored to their current focus (${currentFocus}).
+${triviaEnabled ? `- **✨ Tiny Spark**: A brief, fascinating 1-2 sentence sourced fact or psychological/scientific principle connected to their interests (${interests}) that relates metaphorically to their reflection, with a clear source tag (e.g. [Source: Psychology Today / NASA / MIT Cognitive Science]). Keep it clearly separated at the very end.` : ''}
 
 OFF-TOPIC GUARDRAIL:
-- If the user asks a purely academic, coding, or generic trivia question completely unrelated to their journal (e.g., "how to reverse a linkedlist in java" or "formula for area of a circle"):
-  Gently clarify: "I'm your personal Daylight journaling companion, so I'm here to help you reflect on your journal entries, daily habits, and thoughts. Let's dive into your reflections or daily goals whenever you're ready! 🌸"
-
-STRICT INTEGRITY:
-- Ground all journal reflections in their actual logged data. Never invent events, dates, or numbers not present in their journal.
-- Never diagnose medical conditions or give clinical advice.
-- Output clean, beautifully structured Markdown (using bold headings, short 2-3 sentence paragraphs, and bullet points where helpful). Do NOT output raw JSON or code blocks.`;
+- If asked a purely academic, coding, or generic trivia question completely unrelated to their journal (e.g. "how to reverse a linkedlist in java" or "formula for area of a circle"):
+  Gently clarify: "I'm your personal Daylight journaling companion, so I'm here to help you reflect on your journal entries, daily habits, and thoughts. Let's dive into your reflections or daily goals whenever you're ready! 🌸"`;
+}
 
 /* ── Main Handler ────────────────────────────────────────────── */
 Deno.serve(async (req) => {
@@ -170,6 +186,15 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Fetch user personalisation and settings in parallel
+    const [personalisationRes, settingsRes] = await Promise.all([
+      supabase.from('user_personalisation').select('*').eq('user_id', user.id).maybeSingle(),
+      supabase.from('user_settings').select('display_name').eq('user_id', user.id).maybeSingle(),
+    ]);
+
+    const persona = personalisationRes.data || {};
+    const displayName = settingsRes.data?.display_name || null;
+
     // Query user's planner data
     let query = supabase
       .from('daily_entries')
@@ -209,12 +234,14 @@ Deno.serve(async (req) => {
       ? `${startDate} to ${endDate}`
       : `All entries (${entries[0]?.entry_date} to ${entries[entries.length - 1]?.entry_date})`;
 
+    const systemPrompt = buildSystemPrompt(persona, displayName);
+
     // Prepare multi-turn conversation contents for Gemini
     const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
 
     // Prior chat turns
     if (Array.isArray(history) && history.length > 0) {
-      for (const turn of history.slice(-6)) { // keep last 6 turns for conversational context
+      for (const turn of history.slice(-6)) {
         if (turn.role && turn.text) {
           contents.push({
             role: turn.role === 'user' ? 'user' : 'model',
@@ -239,7 +266,6 @@ ${question}`;
       parts: [{ text: currentPrompt }],
     });
 
-    // Call Gemini models in order of preference
     const modelCandidates = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest'];
     let aiAnswer = '';
 
@@ -251,7 +277,7 @@ ${question}`;
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+              systemInstruction: { parts: [{ text: systemPrompt }] },
               contents,
               generationConfig: {
                 temperature: 0.35,
