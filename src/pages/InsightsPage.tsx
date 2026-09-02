@@ -33,7 +33,9 @@ function getPresetRange(preset: RangePreset): { start: string; end: string } | n
 
 /* ── Inline Markdown Renderer (Bold + Styled Quotes) ───────── */
 function renderInlineTokens(text: string) {
-  const tokens = text.split(/(\*\*.*?\*\*|"[^"\n]+"|“[^”\n]+”)/g);
+  // Strip isolated bullet artifacts
+  const clean = text.replace(/^(\*|-|•)\s*/, '');
+  const tokens = clean.split(/(\*\*.*?\*\*|"[^"\n]+"|“[^”\n]+”)/g);
 
   return tokens.map((tok, i) => {
     if (tok.startsWith('**') && tok.endsWith('**') && tok.length >= 4) {
@@ -58,105 +60,204 @@ function renderInlineTokens(text: string) {
   });
 }
 
+interface SectionData {
+  type: 'intro' | 'patterns' | 'next_step' | 'spark' | 'general';
+  title?: string;
+  items: string[];
+  source?: string;
+}
+
 const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
-  const blocks = text.split(/\n\s*\n/).filter((b) => b.trim());
+  // Pre-process text to remove stray markdown dividers and normalize line endings
+  const raw = text.replace(/---\s*$/gm, '').trim();
+
+  // Split into sections by markdown headers (### or ## or #) or bold headers
+  const lines = raw.split('\n');
+  const sections: SectionData[] = [];
+  let currentSection: SectionData = { type: 'intro', items: [] };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    // Detect headers
+    const headerMatch = line.match(/^(?:###|##|#)\s*(.*)/) || line.match(/^\*\*([^*\n]+)\*\*:?$/);
+    if (headerMatch) {
+      if (currentSection.items.length > 0 || currentSection.title) {
+        sections.push(currentSection);
+      }
+
+      const rawTitle = headerMatch[1].replace(/\*\*/g, '').trim();
+      if (/pattern|observation/i.test(rawTitle)) {
+        currentSection = { type: 'patterns', title: 'Patterns & Observations', items: [] };
+      } else if (/next step|action|suggestion/i.test(rawTitle)) {
+        currentSection = { type: 'next_step', title: 'One Small Next Step', items: [] };
+      } else if (/spark|trivia|side note/i.test(rawTitle)) {
+        currentSection = { type: 'spark', title: '✨ Tiny Spark', items: [] };
+      } else {
+        currentSection = { type: 'general', title: rawTitle, items: [] };
+      }
+      continue;
+    }
+
+    // Check for source tags inside spark
+    if (currentSection.type === 'spark' && /\[?source:\s*([^\]]+)\]?/i.test(line)) {
+      const srcMatch = line.match(/\[?source:\s*([^\]]+)\]?/i);
+      if (srcMatch) {
+        currentSection.source = srcMatch[1].trim();
+        continue;
+      }
+    }
+
+    currentSection.items.push(line);
+  }
+
+  if (currentSection.items.length > 0 || currentSection.title) {
+    sections.push(currentSection);
+  }
 
   return (
-    <div className="space-y-3.5 text-sm text-text-primary dark:text-dark-text leading-relaxed">
-      {blocks.map((block, idx) => {
-        const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+    <div className="space-y-4 text-sm text-text-primary dark:text-dark-text leading-relaxed">
+      {sections.map((sec, sIdx) => {
+        // 1. INTRO / DIRECT REFLECTION
+        if (sec.type === 'intro' || (!sec.title && sec.type === 'general')) {
+          return (
+            <div key={sIdx} className="space-y-2.5">
+              {sec.items.map((p, pIdx) => {
+                if (/^(\*|-|•)\s*/.test(p)) {
+                  return (
+                    <div key={pIdx} className="flex items-start gap-2 pl-2">
+                      <span className="text-lavender font-bold mt-0.5">•</span>
+                      <p className="flex-1 leading-relaxed">{renderInlineTokens(p)}</p>
+                    </div>
+                  );
+                }
+                return (
+                  <p key={pIdx} className="text-sm leading-relaxed text-text-primary dark:text-dark-text">
+                    {renderInlineTokens(p)}
+                  </p>
+                );
+              })}
+            </div>
+          );
+        }
 
-        // Header detection: e.g. "**Observation**:" or "**✨ Tiny Spark**:"
-        const headerMatch = block.match(/^(\d+\.\s*)?\*\*(.*?)\*\*[:\s]*/);
-        if (headerMatch) {
-          const rawTitle = headerMatch[2];
-          const remaining = block.slice(headerMatch[0].length).trim();
-          const isSpark = /spark|trivia|side note/i.test(rawTitle);
-          const isStep = /next step|suggestion|small action/i.test(rawTitle);
+        // 2. PATTERNS & OBSERVATIONS (Rendered as distinct, bite-sized observation cards)
+        if (sec.type === 'patterns') {
+          // Group bullet points
+          const bulletCards: { title?: string; body: string }[] = [];
+          let curCard: { title?: string; body: string } | null = null;
 
-          if (isSpark) {
-            return (
-              <div
-                key={idx}
-                className="mt-3 p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 dark:border-amber-500/20 space-y-1.5"
-              >
-                <div className="font-bold text-xs uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                  <Lightbulb size={14} className="text-amber-500 animate-bounce" />
-                  {rawTitle}
-                </div>
-                <p className="text-xs text-text-secondary dark:text-dark-text leading-relaxed">
-                  {renderInlineTokens(remaining || block)}
-                </p>
-              </div>
-            );
+          for (const item of sec.items) {
+            const bulletMatch = item.match(/^(?:•|\*|-)\s*(?:\*\*(.*?)\*\*:?|\b(.*?):)\s*(.*)/);
+            if (bulletMatch) {
+              if (curCard) bulletCards.push(curCard);
+              curCard = {
+                title: bulletMatch[1] || bulletMatch[2],
+                body: bulletMatch[3],
+              };
+            } else if (curCard) {
+              curCard.body += ` ${item}`;
+            } else {
+              curCard = { body: item };
+            }
           }
-
-          if (isStep) {
-            return (
-              <div
-                key={idx}
-                className="p-3 rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 dark:border-emerald-500/20 space-y-1"
-              >
-                <div className="font-bold text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                  <Target size={14} className="text-emerald-500" />
-                  {rawTitle}
-                </div>
-                <p className="text-xs text-text-secondary dark:text-dark-text leading-relaxed">
-                  {renderInlineTokens(remaining)}
-                </p>
-              </div>
-            );
-          }
+          if (curCard) bulletCards.push(curCard);
 
           return (
-            <div key={idx} className="space-y-1.5 pt-1">
-              <div className="font-bold text-xs uppercase tracking-wider text-lavender flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-lavender inline-block" />
-                {rawTitle}
+            <div key={sIdx} className="space-y-2.5 pt-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-lavender-dark dark:text-lavender">
+                <Sparkles size={14} className="text-lavender" />
+                <span>Patterns & Observations</span>
               </div>
-              {remaining && (
-                <div className="pl-3.5 border-l-2 border-lavender/30 dark:border-lavender/20 space-y-2">
-                  {remaining.split('\n').map((l, lIdx) => {
-                    if (/^(\*|-|•)\s/.test(l)) {
-                      return (
-                        <div key={lIdx} className="flex items-start gap-2 text-sm leading-relaxed">
-                          <span className="text-lavender font-bold flex-shrink-0">•</span>
-                          <span className="flex-1">{renderInlineTokens(l.replace(/^(\*|-|•)\s+/, ''))}</span>
-                        </div>
-                      );
-                    }
-                    return (
-                      <p key={lIdx} className="leading-relaxed">
-                        {renderInlineTokens(l)}
-                      </p>
-                    );
-                  })}
+
+              <div className="grid grid-cols-1 gap-2">
+                {bulletCards.map((card, cIdx) => (
+                  <div
+                    key={cIdx}
+                    className="p-3.5 rounded-2xl bg-surface/70 dark:bg-dark-surface/70 border border-border/60 dark:border-dark-border/60 space-y-1 hover:border-lavender/30 transition-colors"
+                  >
+                    {card.title && (
+                      <div className="font-bold text-xs text-text-primary dark:text-dark-text flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-lavender shrink-0" />
+                        <span>{card.title}</span>
+                      </div>
+                    )}
+                    <p className="text-xs text-text-secondary dark:text-dark-text-secondary leading-relaxed">
+                      {renderInlineTokens(card.body)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        // 3. ONE SMALL NEXT STEP (Emerald Action Card)
+        if (sec.type === 'next_step') {
+          return (
+            <div
+              key={sIdx}
+              className="p-4 rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 dark:border-emerald-500/25 space-y-1.5 shadow-xs"
+            >
+              <div className="font-bold text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                <Target size={14} className="text-emerald-500" />
+                <span>One Small Next Step</span>
+              </div>
+              <div className="text-xs text-text-primary dark:text-dark-text leading-relaxed space-y-1">
+                {sec.items.map((it, itIdx) => (
+                  <p key={itIdx}>{renderInlineTokens(it)}</p>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        // 4. ✨ TINY SPARK (Amber Sourced Trivia Card)
+        if (sec.type === 'spark') {
+          return (
+            <div
+              key={sIdx}
+              className="p-4 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 dark:border-amber-500/25 space-y-2 shadow-xs"
+            >
+              <div className="font-bold text-xs uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                <Lightbulb size={14} className="text-amber-500" />
+                <span>✨ Tiny Spark</span>
+              </div>
+              <div className="text-xs text-text-primary dark:text-dark-text leading-relaxed space-y-1">
+                {sec.items.map((it, itIdx) => (
+                  <p key={itIdx}>{renderInlineTokens(it)}</p>
+                ))}
+              </div>
+              {sec.source && (
+                <div className="pt-1 flex items-center gap-1 text-[11px] text-amber-700/80 dark:text-amber-400/80 font-medium">
+                  <span className="opacity-60">Source:</span>
+                  <span className="bg-amber-500/15 dark:bg-amber-500/25 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                    {sec.source}
+                  </span>
                 </div>
               )}
             </div>
           );
         }
 
-        // Bulleted lists
-        const isList = lines.length > 1 && lines.every((l) => /^(\*|-|•|\d+\.)\s/.test(l));
-        if (isList) {
-          return (
-            <div key={idx} className="space-y-1.5 pl-2">
-              {lines.map((l, lIdx) => (
-                <div key={lIdx} className="flex items-start gap-2 text-sm leading-relaxed">
-                  <span className="text-lavender font-bold flex-shrink-0">•</span>
-                  <span className="flex-1">{renderInlineTokens(l.replace(/^(\*|-|•|\d+\.)\s+/, ''))}</span>
-                </div>
+        // 5. GENERAL SECTION
+        return (
+          <div key={sIdx} className="space-y-1.5 pt-1">
+            {sec.title && (
+              <div className="font-bold text-xs uppercase tracking-wider text-lavender flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-lavender inline-block" />
+                {sec.title}
+              </div>
+            )}
+            <div className="pl-3 border-l-2 border-lavender/30 dark:border-lavender/20 space-y-1.5">
+              {sec.items.map((it, itIdx) => (
+                <p key={itIdx} className="text-xs text-text-secondary dark:text-dark-text-secondary leading-relaxed">
+                  {renderInlineTokens(it)}
+                </p>
               ))}
             </div>
-          );
-        }
-
-        // Regular paragraph
-        return (
-          <p key={idx} className="leading-relaxed">
-            {renderInlineTokens(block)}
-          </p>
+          </div>
         );
       })}
     </div>
