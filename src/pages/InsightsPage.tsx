@@ -5,7 +5,7 @@ import { AIThinkingCompanion } from '../components/AIThinkingCompanion';
 import { format, subDays, startOfMonth, endOfMonth, addMonths, subMonths, startOfWeek, addDays, isSameMonth, isSameDay, isAfter, isBefore, parse } from 'date-fns';
 import {
   Sparkles, Send, Loader2, HeartHandshake, Calendar, ChevronLeft, ChevronRight,
-  X, AlertTriangle, Shield, Clock, FileText, Info,
+  X, AlertTriangle, Shield, Clock, FileText, Info, RotateCcw,
 } from 'lucide-react';
 
 /* ── Date Range Presets ────────────────────────────────────── */
@@ -25,9 +25,24 @@ function getPresetRange(preset: RangePreset): { start: string; end: string } | n
   }
 }
 
+/* Check if a question contains an explicit date/timeline phrase */
+function hasExplicitDate(question: string): boolean {
+  const q = question.toLowerCase();
+  if (q.includes('today') || q.includes('yesterday') || q.includes('last week') || q.includes('this month') || q.includes('last month') || q.includes('2 weeks') || q.includes('14 days') || q.includes('7 days') || q.includes('30 days')) {
+    return true;
+  }
+  const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  for (const m of months) {
+    if (q.includes(m)) return true;
+  }
+  if (/\b\d{4}-\d{2}-\d{2}\b/.test(q)) return true;
+  if (/\b\d{1,2}(st|nd|rd|th)?\s+(of\s+)?[a-z]+/i.test(q)) return true;
+  return false;
+}
+
 /* ── Inline Markdown Renderer (Bold + Quotes) ──────────────── */
 function renderInlineTokens(text: string) {
-  const tokens = text.split(/(\*\*.*?\*\*|"[^"\n]+"|"[^"\n]+")/g);
+  const tokens = text.split(/(\*\*.*?\*\*|"[^"\n]+"|“[^”\n]+”)/g);
   return tokens.map((tok, i) => {
     if (tok.startsWith('**') && tok.endsWith('**') && tok.length >= 4) {
       return (
@@ -36,10 +51,10 @@ function renderInlineTokens(text: string) {
         </strong>
       );
     }
-    if ((tok.startsWith('"') && tok.endsWith('"')) || (tok.startsWith('\u201c') && tok.endsWith('\u201d'))) {
+    if ((tok.startsWith('"') && tok.endsWith('"')) || (tok.startsWith('“') && tok.endsWith('”'))) {
       return (
         <span key={i} className="italic font-serif text-lavender-dark dark:text-lavender-light bg-lavender/10 dark:bg-lavender/20 px-1.5 py-0.5 rounded text-[13px] mx-0.5 inline-block">
-          \u201c{tok.slice(1, -1)}\u201d
+          “{tok.slice(1, -1)}”
         </span>
       );
     }
@@ -69,7 +84,7 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
                     if (/^(\*|-|•)\s/.test(l)) {
                       return (
                         <div key={lIdx} className="flex items-start gap-2 text-sm leading-relaxed">
-                          <span className="text-lavender font-bold flex-shrink-0">&bull;</span>
+                          <span className="text-lavender font-bold flex-shrink-0">•</span>
                           <span className="flex-1">{renderInlineTokens(l.replace(/^(\*|-|•)\s+/, ''))}</span>
                         </div>
                       );
@@ -87,8 +102,8 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
             <div key={idx} className="space-y-1.5 pl-2">
               {lines.map((l, lIdx) => (
                 <div key={lIdx} className="flex items-start gap-2 text-sm leading-relaxed">
-                  <span className="text-lavender font-bold flex-shrink-0">&bull;</span>
-                  <span className="flex-1">{renderInlineTokens(l.replace(/^(\*|-|•|\d+\.)\s+/, ''))}</span>
+                  <span className="text-lavender font-bold flex-shrink-0">•</span>
+                  <span className="flex-1">{renderInlineTokens(l.replace(/^(\*|-|•)\s+/, ''))}</span>
                 </div>
               ))}
             </div>
@@ -120,7 +135,7 @@ const ClaimsList: React.FC<{ claims: EvidenceClaim[]; evidenceMap: EvidenceRef[]
   return (
     <div className="space-y-3 pt-3 border-t border-border/40 dark:border-dark-border/40">
       <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted dark:text-dark-text-muted flex items-center gap-1">
-        <Shield size={10} /> Evidence-Grounded Claims
+        <Shield size={10} /> Grounded Observations
       </p>
       {claims.map((claim, idx) => (
         <div key={idx} className="space-y-1.5">
@@ -151,7 +166,6 @@ const CalendarRangePicker: React.FC<{
   const [selEnd, setSelEnd] = useState<Date | null>(endDate);
 
   const monthStart = startOfMonth(viewMonth);
-  const monthEnd = endOfMonth(viewMonth);
   const calStart = startOfWeek(monthStart);
 
   const days: Date[] = [];
@@ -162,7 +176,7 @@ const CalendarRangePicker: React.FC<{
   }
 
   const handleDayClick = (day: Date) => {
-    if (isAfter(day, new Date())) return; // no future dates
+    if (isAfter(day, new Date())) return;
     if (!selStart || (selStart && selEnd)) {
       setSelStart(day);
       setSelEnd(null);
@@ -191,7 +205,6 @@ const CalendarRangePicker: React.FC<{
         role="dialog"
         aria-modal="true"
       >
-        {/* Header */}
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-text-primary dark:text-dark-text flex items-center gap-2">
             <Calendar size={16} className="text-lavender" />
@@ -202,7 +215,6 @@ const CalendarRangePicker: React.FC<{
           </button>
         </div>
 
-        {/* Selection preview */}
         <div className="text-xs text-center text-text-secondary dark:text-dark-text-secondary bg-surface dark:bg-dark-surface rounded-xl py-2 px-3 font-medium">
           {selStart && selEnd
             ? `${format(selStart, 'MMM d, yyyy')} → ${format(selEnd, 'MMM d, yyyy')}`
@@ -211,7 +223,6 @@ const CalendarRangePicker: React.FC<{
               : 'Tap start date, then end date'}
         </div>
 
-        {/* Month navigation */}
         <div className="flex items-center justify-between">
           <button onClick={() => setViewMonth(subMonths(viewMonth, 1))} className="p-1.5 rounded-lg hover:bg-border/30 dark:hover:bg-dark-border/30 transition-colors">
             <ChevronLeft size={16} className="text-text-muted" />
@@ -224,7 +235,6 @@ const CalendarRangePicker: React.FC<{
           </button>
         </div>
 
-        {/* Day headers */}
         <div className="grid grid-cols-7 gap-0.5 text-center">
           {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((dh) => (
             <div key={dh} className="text-[10px] font-bold text-text-muted dark:text-dark-text-muted uppercase py-1">
@@ -264,7 +274,6 @@ const CalendarRangePicker: React.FC<{
           })}
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-2 pt-1">
           <button type="button" className="btn-ghost flex-1 text-xs py-2.5" onClick={onClose}>
             Cancel
@@ -292,39 +301,26 @@ const CalendarRangePicker: React.FC<{
 export const InsightsPage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const [question, setQuestion] = useState('');
+  const [activeQuestion, setActiveQuestion] = useState('');
   const [result, setResult] = useState<GroundedInsightResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [activePreset, setActivePreset] = useState<RangePreset>('last30');
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
-  const currentRange = useMemo(() => {
-    if (activePreset === 'custom' && customRange) return customRange;
-    return getPresetRange(activePreset) || getPresetRange('last30')!;
-  }, [activePreset, customRange]);
-
-  const ask = useCallback(async (q: string, overrideRange?: { start: string; end: string }) => {
+  const executeQuery = useCallback(async (q: string, range: { start: string; end: string }) => {
     if (!q.trim() || !user) return;
     setLoading(true);
-    setQuestion(q);
-
-    // Check if question text contains a date reference — use NLP-parsed range
-    const nlpRange = parseDateRange(q);
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const defaultRange = { start: format(subDays(new Date(), 30), 'yyyy-MM-dd'), end: today };
-
-    // If NLP parsed something different from default 30-day, use that
-    const hasNlpDate = nlpRange.start !== defaultRange.start || nlpRange.end !== defaultRange.end;
-    const finalRange = overrideRange || (hasNlpDate ? nlpRange : currentRange);
-
+    setActiveQuestion(q);
+    setPendingQuestion(null);
     try {
-      const res = await queryInsights(user.id, q, finalRange);
+      const res = await queryInsights(user.id, q, range);
       setResult(res);
     } catch (err) {
       setResult({
         type: 'error',
         summary: 'Something went wrong while reflecting on your data. Please try again.',
-        dateRange: finalRange,
+        dateRange: range,
         stats: {},
         claims: [],
         evidenceMap: [],
@@ -333,29 +329,42 @@ export const InsightsPage: React.FC = () => {
       });
     }
     setLoading(false);
-  }, [user, currentRange]);
+  }, [user]);
 
-  const handlePresetClick = (preset: RangePreset) => {
+  const handleSend = useCallback((q: string) => {
+    if (!q.trim()) return;
+    setQuestion(q);
+    setResult(null);
+
+    // 1. Check if question contains explicit date/range
+    if (hasExplicitDate(q)) {
+      const parsed = parseDateRange(q);
+      executeQuery(q, parsed);
+    } else {
+      // 2. Ask user to choose a timeframe first!
+      setPendingQuestion(q);
+    }
+  }, [executeQuery]);
+
+  const handleTimeframeChoice = (preset: RangePreset) => {
     if (preset === 'custom') {
       setShowCalendar(true);
     } else {
-      setActivePreset(preset);
-      setCustomRange(null);
+      const range = getPresetRange(preset);
+      if (range && pendingQuestion) {
+        executeQuery(pendingQuestion, range);
+      }
     }
   };
 
   const handleCalendarSelect = (start: Date, end: Date) => {
     const range = { start: format(start, 'yyyy-MM-dd'), end: format(end, 'yyyy-MM-dd') };
     setCustomRange(range);
-    setActivePreset('custom');
+    setShowCalendar(false);
+    if (pendingQuestion) {
+      executeQuery(pendingQuestion, range);
+    }
   };
-
-  const presets: { key: RangePreset; label: string; icon: string }[] = [
-    { key: 'last7', label: 'Last 7 days', icon: '⚡' },
-    { key: 'last30', label: 'Last 30 days', icon: '📅' },
-    { key: 'thisMonth', label: 'This month', icon: '🌙' },
-    { key: 'custom', label: 'Custom range', icon: '🗓️' },
-  ];
 
   return (
     <div className="space-y-6">
@@ -366,34 +375,7 @@ export const InsightsPage: React.FC = () => {
           Insights & Reflections
         </h1>
         <p className="text-sm text-text-secondary dark:text-dark-text-secondary mt-1">
-          A gentle, evidence-grounded reflection on your habits, thoughts, and daily rhythm.
-        </p>
-      </div>
-
-      {/* Date Range Selector */}
-      <div className="space-y-2">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted dark:text-dark-text-muted flex items-center gap-1">
-          <Clock size={10} /> Timeline
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {presets.map(({ key, label, icon }) => (
-            <button
-              key={key}
-              type="button"
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all tap-spring ${
-                activePreset === key
-                  ? 'bg-lavender text-white border-lavender shadow-sm'
-                  : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border/40 hover:border-lavender/40'
-              }`}
-              onClick={() => handlePresetClick(key)}
-            >
-              {icon} {label}
-            </button>
-          ))}
-        </div>
-        {/* Active range display */}
-        <p className="text-[11px] text-text-muted dark:text-dark-text-muted italic">
-          Analyzing entries from <span className="font-semibold text-lavender">{currentRange?.start}</span> to <span className="font-semibold text-lavender">{currentRange?.end}</span>
+          A gentle, private reflection on your habits, thoughts, and daily rhythm.
         </p>
       </div>
 
@@ -403,7 +385,7 @@ export const InsightsPage: React.FC = () => {
           <button
             key={sq}
             className="btn-secondary text-sm py-2 px-3 tap-spring"
-            onClick={() => ask(sq)}
+            onClick={() => handleSend(sq)}
             disabled={loading}
           >
             {sq}
@@ -416,19 +398,59 @@ export const InsightsPage: React.FC = () => {
         <input
           type="text"
           className="input-field flex-1"
-          placeholder="Ask anything about your journal entries\u2026"
+          placeholder="Ask anything about your journal entries (e.g. brain dump on 1st September)..."
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && ask(question)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend(question)}
         />
         <button
           className="btn-primary px-4 tap-spring"
-          onClick={() => ask(question)}
+          onClick={() => handleSend(question)}
           disabled={loading || !question.trim()}
         >
           {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
         </button>
       </div>
+
+      {/* Timeframe Selector Prompt (Appears ONLY when question lacks explicit date) */}
+      {pendingQuestion && !loading && (
+        <div className="card fade-in border-lavender/30 dark:border-lavender/20 bg-lavender/5 dark:bg-lavender/10 space-y-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-lavender-dark dark:text-lavender-light">
+            <Clock size={14} />
+            <span>Which timeframe would you like to analyze for "{pendingQuestion}"?</span>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              type="button"
+              className="btn-secondary text-xs py-2 px-3 tap-spring"
+              onClick={() => handleTimeframeChoice('last7')}
+            >
+              ⚡ Last 7 days
+            </button>
+            <button
+              type="button"
+              className="btn-secondary text-xs py-2 px-3 tap-spring"
+              onClick={() => handleTimeframeChoice('last30')}
+            >
+              📅 Last 30 days
+            </button>
+            <button
+              type="button"
+              className="btn-secondary text-xs py-2 px-3 tap-spring"
+              onClick={() => handleTimeframeChoice('thisMonth')}
+            >
+              🌙 This month
+            </button>
+            <button
+              type="button"
+              className="btn-secondary text-xs py-2 px-3 tap-spring border-lavender/40 text-lavender-dark dark:text-lavender-light"
+              onClick={() => handleTimeframeChoice('custom')}
+            >
+              🗓️ Custom range...
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Loading State */}
       {loading && (
@@ -437,82 +459,74 @@ export const InsightsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Result */}
+      {/* Result Card */}
       {!loading && result && (
         <div className="card fade-in space-y-4">
-          {/* Header row */}
           <div className="flex items-start gap-3.5">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${
-              result.isFallback
+              result.type === 'error' || result.type === 'rate-limited'
                 ? 'bg-gradient-to-br from-amber-400 to-orange-400'
                 : 'bg-gradient-to-br from-lavender to-blue-soft'
             }`}>
-              {result.isFallback
+              {result.type === 'error' || result.type === 'rate-limited'
                 ? <AlertTriangle size={20} className="text-white" />
                 : <HeartHandshake size={20} className="text-white" />
               }
             </div>
+
             <div className="flex-1 min-w-0 space-y-3">
-              {/* Fallback / rate-limit badge */}
+              {/* Question title */}
+              {activeQuestion && (
+                <p className="text-xs font-bold text-lavender-dark dark:text-lavender-light">
+                  Q: "{activeQuestion}"
+                </p>
+              )}
+
+              {/* Status badges for special states */}
               {result.type === 'rate-limited' && (
                 <div className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                  <Info size={10} /> Rate Limit Reached
-                </div>
-              )}
-              {result.type === 'fallback' && (
-                <div className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                  <Info size={10} /> Verified Statistics (AI Unavailable)
-                </div>
-              )}
-              {result.type === 'insufficient-data' && (
-                <div className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                  <Info size={10} /> Insufficient Data
+                  <Info size={10} /> Daily Limit Reached (10/day)
                 </div>
               )}
 
-              {/* Summary */}
-              {result.isFallback || result.type === 'insufficient-data' ? (
-                <div className="text-text-secondary dark:text-dark-text-secondary">
-                  <p className="whitespace-pre-line text-sm">{result.summary}</p>
+              {/* Formatted Summary / Answer */}
+              {result.type === 'insufficient-data' ? (
+                <div className="text-text-secondary dark:text-dark-text-secondary space-y-2">
+                  <p className="text-sm leading-relaxed whitespace-pre-line">{result.summary}</p>
                 </div>
               ) : (
                 <FormattedInsightText text={result.summary} />
               )}
 
-              {/* Evidence-Grounded Claims */}
-              {!result.isFallback && result.claims.length > 0 && (
+              {/* Grounded Claims / Citations */}
+              {result.claims.length > 0 && (
                 <ClaimsList claims={result.claims} evidenceMap={result.evidenceMap} />
               )}
 
-              {/* Limitations */}
-              {result.limitations && !result.isFallback && (
-                <p className="text-[11px] text-text-muted dark:text-dark-text-muted italic pt-2">
-                  ⚠️ {result.limitations}
-                </p>
-              )}
-
-              {/* Date range indicator */}
+              {/* Date range footer */}
               {result.dateRange?.start && (
-                <p className="text-xs text-text-muted dark:text-dark-text-muted pt-3 border-t border-border dark:border-dark-border">
-                  📅 Based on entries from <span className="font-semibold">{result.dateRange.start}</span> to <span className="font-semibold">{result.dateRange.end}</span>
-                  {result.stats?.entryCount != null && <span> &middot; {result.stats.entryCount} entries</span>}
-                </p>
+                <div className="pt-3 border-t border-border/40 dark:border-dark-border/40 flex items-center justify-between text-xs text-text-muted dark:text-dark-text-muted">
+                  <span>
+                    📅 Based on entries from <strong className="font-semibold text-text-primary dark:text-dark-text">{result.dateRange.start}</strong> to <strong className="font-semibold text-text-primary dark:text-dark-text">{result.dateRange.end}</strong>
+                    {result.stats?.entryCount != null && ` (${result.stats.entryCount} ${result.stats.entryCount === 1 ? 'entry' : 'entries'})`}
+                  </span>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Disclaimer */}
-          <p className="text-[11px] text-text-muted dark:text-dark-text-muted pt-3 border-t border-border/40 dark:border-dark-border/40 italic">
+          {/* Medical Disclaimer */}
+          <p className="text-[11px] text-text-muted dark:text-dark-text-muted pt-2 border-t border-border/40 dark:border-dark-border/40 italic">
             ℹ️ Insights are based only on your saved entries and are not medical advice.
           </p>
         </div>
       )}
 
-      {/* Empty state */}
-      {!result && !loading && (
+      {/* Empty State (initial load) */}
+      {!result && !loading && !pendingQuestion && (
         <div className="text-center py-12 text-text-muted dark:text-dark-text-muted">
-          <Sparkles size={32} className="mx-auto mb-3 opacity-30" />
-          <p className="font-semibold">Pick a question above or ask your own</p>
+          <Sparkles size={32} className="mx-auto mb-3 opacity-30 text-lavender" />
+          <p className="font-semibold text-text-primary dark:text-dark-text">Ask a question above or choose a suggested topic</p>
           <p className="text-xs mt-1">
             Every reflection is grounded directly in your personal journal logs.
           </p>
