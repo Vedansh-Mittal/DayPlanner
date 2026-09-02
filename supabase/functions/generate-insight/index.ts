@@ -164,25 +164,38 @@ function buildSystemPrompt(persona: any, displayName?: string | null, userQuesti
 
   const toneBlock = toneDirectives.length ? toneDirectives.join('\n') : '• Balanced, compassionate, and attentive.';
 
-  // Detect conversational intent
-  const trimmedQ = (userQuestion || '').trim();
-  const isCloserOrGratitude =
-    /^(thanks?|thank\s*you|thx|ty|good\s*night|gn|bye|see\s*you|talk\s*later|got\s*it|makes\s*sense|okay\s*got\s*it|cool|appreciate\s*it|thank\s*you\s*so\s*much|thanks\s*a\s*lot|perfect\s*thanks)[!.\s]*$/i.test(trimmedQ);
+  // Classify conversational intent
+  const cleanQ = (userQuestion || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const wordCount = cleanQ.split(' ').filter(Boolean).length;
+
+  const isCloser =
+    /^(thank\s*you|thanks|thx|ty|good\s*night|gn|bye|goodbye|see\s*you|talk\s*later|got\s*it|makes\s*sense|okay|ok|cool|alright|sounds\s*good|gotcha|sweet|appreciate\s*it|appreciate\s*you)\b/.test(cleanQ) &&
+    wordCount <= 6;
 
   const isGreeting =
-    /^(hi|hello|hey|heya|howdy|good\s*morning|good\s*afternoon|good\s*evening|what'?s\s*up|sup)[!.\s]*$/i.test(trimmedQ);
+    /^(hi|hello|hey|heya|howdy|good\s*morning|good\s*afternoon|good\s*evening|morning|evening|afternoon|whats\s*up|what\s*up|sup)\b/.test(cleanQ) &&
+    wordCount <= 5;
+
+  const isSmalltalk =
+    /^(how\s*are\s*you|how\s*r\s*u|how\s*is\s*it\s*going|hows\s*it\s*going|how\s*are\s*things)\b/.test(cleanQ) &&
+    wordCount <= 6;
 
   let outputStructureInstructions = '';
 
-  if (isCloserOrGratitude) {
+  if (isCloser) {
     outputStructureInstructions = `CONVERSATIONAL CLOSER / GRATITUDE DETECTED:
-The user is saying a closing remark or gratitude ("${trimmedQ}").
+The user is saying a closing remark or gratitude ("${userQuestion}").
 - Respond warmly, naturally, and concisely in 1-2 friendly sentences (e.g. "You're very welcome, ${displayName || 'friend'}! Rest well and take things one step at a time. I'm right here whenever you want to reflect again 🌸").
 - DO NOT output any "### Patterns & Observations" or "### One Small Next Step" sections. Keep it natural, human, and brief.`;
   } else if (isGreeting) {
     outputStructureInstructions = `GREETING DETECTED:
-The user is greeting you ("${trimmedQ}").
-- Respond in 1-2 friendly, welcoming sentences asking how they are feeling or inviting them to share today's reflections or daily goals.
+The user is greeting you ("${userQuestion}").
+- Respond in 1-2 friendly, welcoming sentences (e.g. "Good morning, ${displayName || 'friend'}! ☀️ How are you feeling today? Ready to set your morning intentions or reflect on your goals whenever you are!").
+- DO NOT output any "### Patterns & Observations" or "### One Small Next Step" sections. Keep it completely light and conversational without analyzing history unless asked.`;
+  } else if (isSmalltalk) {
+    outputStructureInstructions = `CASUAL SMALLTALK DETECTED:
+The user is asking how you are or checking in ("${userQuestion}").
+- Respond warmly in 1-2 friendly sentences as their personal journaling companion, and invite them to share how their own day is going.
 - DO NOT output "### Patterns & Observations" or "### One Small Next Step".`;
   } else {
     // Standard / Deep reflection mode
