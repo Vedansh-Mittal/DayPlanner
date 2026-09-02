@@ -33,8 +33,12 @@ function getPresetRange(preset: RangePreset): { start: string; end: string } | n
 
 /* ── Inline Markdown Renderer (Bold + Styled Quotes) ───────── */
 function renderInlineTokens(text: string) {
-  // Strip isolated bullet artifacts
-  const clean = text.replace(/^(\*|-|•)\s*/, '');
+  // Strip isolated bullet artifacts and stray backticks around quotes
+  const clean = text
+    .replace(/^(\*|-|•)\s*/, '')
+    .replace(/`([“"][^`"”]+[”"])`/g, '$1')
+    .replace(/`([^`]+)`/g, '$1');
+
   const tokens = clean.split(/(\*\*.*?\*\*|"[^"\n]+"|“[^”\n]+”)/g);
 
   return tokens.map((tok, i) => {

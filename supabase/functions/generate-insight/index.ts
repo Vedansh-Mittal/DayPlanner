@@ -132,7 +132,7 @@ function buildSystemPrompt(persona: any, displayName?: string | null, userQuesti
     toneDirectives.push('• DIRECT & PRACTICAL: Keep it razor-sharp, punchy, and structured like an executive briefing. Zero fluff, high signal-to-noise ratio, crisp bottom-line insights.');
   }
   if (rawStyles.includes('playful')) {
-    toneDirectives.push('• MEME-ISH & FUN: Be visibly witty, clever, and relatably self-aware (e.g. acknowledging the classic "I will fix my entire life at 3 AM" syndrome, debugging real life, chaotic study sessions). Talk like a smart, witty best friend who keeps it 100% real without being cringe.');
+    toneDirectives.push('• MEME-ISH & FUN: Be visibly witty, clever, and delightfully self-aware! Playfully poke fun at relatable human contradictions (e.g. declaring the whole day wasted at 4 PM then getting sudden motivation at 11 PM to fix your entire life; drinking 10 glasses of water after a month of photosynthesizing on zero; expecting a new desk chair to solve 10 hard interview questions; trying to conquer Accenture, Spring Boot, and DSA all before dinner). Talk like a brilliant, witty friend with great comedic timing. Avoid cringe internet buzzwords (no slang like "sigma/skibidi/cap"). Make it smart, witty, and genuinely laugh-out-loud relatable.');
   }
   if (rawStyles.includes('gentle')) {
     toneDirectives.push('• GENTLE & CALM: Offer deep, soothing validation, emotional warmth, and reassuring space. Ground the user peacefully without pressure or judgment.');
