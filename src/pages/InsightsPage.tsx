@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuthStore } from '../stores/auth-store';
-import { usePersonalisation } from '../hooks/usePersonalisation';
 import {
   queryInsights,
   SUGGESTED_QUESTIONS,
@@ -10,16 +9,8 @@ import { AIThinkingCompanion } from '../components/AIThinkingCompanion';
 import { format, subDays, startOfMonth, endOfMonth, addMonths, subMonths, startOfWeek, addDays, isSameMonth, isSameDay, isAfter, isBefore, parse } from 'date-fns';
 import {
   Sparkles, Send, Loader2, HeartHandshake, Calendar, ChevronLeft, ChevronRight,
-  X, RotateCcw, Clock, User, Info, MessageSquare, Lightbulb, Compass, Target,
-  SlidersHorizontal, Check, Smile, Briefcase,
+  X, RotateCcw, Clock, User, MessageSquare, Lightbulb, Target,
 } from 'lucide-react';
-import {
-  LIFE_STAGE_OPTIONS,
-  CAREER_FIELD_OPTIONS,
-  FOCUS_OPTIONS,
-  INTEREST_OPTIONS,
-  SUPPORT_STYLE_OPTIONS,
-} from '../types/database';
 
 /* ── Date Range Presets ────────────────────────────────────── */
 type RangePreset = 'all' | 'last7' | 'last30' | 'thisMonth' | 'custom';
@@ -154,7 +145,7 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
               {lines.map((l, lIdx) => (
                 <div key={lIdx} className="flex items-start gap-2 text-sm leading-relaxed">
                   <span className="text-lavender font-bold flex-shrink-0">•</span>
-                  <span className="flex-1">{renderInlineTokens(l.replace(/^(\*|-|•)\s+/, ''))}</span>
+                  <span className="flex-1">{renderInlineTokens(l.replace(/^(\*|-|•|\d+\.)\s+/, ''))}</span>
                 </div>
               ))}
             </div>
@@ -168,279 +159,6 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
           </p>
         );
       })}
-    </div>
-  );
-};
-
-/* ── Personalisation Quick Modal ───────────────────────────── */
-const PersonalisationModal: React.FC<{
-  onClose: () => void;
-}> = ({ onClose }) => {
-  const { personalisation, updatePersonalisation, saving } = usePersonalisation();
-  const [lifeStages, setLifeStages] = useState<string[]>(personalisation?.life_stages || []);
-  const [careerFields, setCareerFields] = useState<string[]>(personalisation?.career_fields || []);
-  const [currentFocuses, setCurrentFocuses] = useState<string[]>(personalisation?.current_focuses || []);
-  const [interests, setInterests] = useState<string[]>(personalisation?.interests || []);
-  const [supportStyles, setSupportStyles] = useState<('gentle' | 'cheerful' | 'direct' | 'playful')[]>(
-    personalisation?.support_styles?.length ? personalisation.support_styles : ['gentle']
-  );
-  const [triviaEnabled, setTriviaEnabled] = useState<boolean>(personalisation?.trivia_enabled !== false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
-
-  const handleSave = async () => {
-    try {
-      await updatePersonalisation({
-        life_stages: lifeStages,
-        career_fields: careerFields,
-        current_focuses: currentFocuses,
-        interests,
-        support_styles: supportStyles.length ? supportStyles : ['gentle'],
-        trivia_enabled: triviaEnabled,
-      });
-      setSavedSuccess(true);
-      setTimeout(() => {
-        setSavedSuccess(false);
-        onClose();
-      }, 700);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-      <div
-        className="bg-white dark:bg-dark-card border border-border/80 dark:border-dark-border rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-scale-up max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-lavender/10 text-lavender flex items-center justify-center">
-              <Sparkles size={16} />
-            </div>
-            <h3 className="text-base font-bold text-text-primary dark:text-dark-text">
-              Personalise Your Companion
-            </h3>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-border/30 dark:hover:bg-dark-border/30 transition-colors">
-            <X size={16} className="text-text-muted" />
-          </button>
-        </div>
-
-        <p className="text-xs text-text-secondary dark:text-dark-text-secondary">
-          Choose all options that fit you. Help Mewd tailor tone, examples, and advice to your actual journey.
-        </p>
-
-        {/* Current Path(s) */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Compass size={13} className="text-lavender" />
-              Current Path / Stage
-            </span>
-            <span className="text-[10px] text-text-muted font-normal">Select multiple</span>
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            {LIFE_STAGE_OPTIONS.map((st) => {
-              const isSelected = lifeStages.includes(st);
-              return (
-                <button
-                  key={st}
-                  type="button"
-                  className={`text-xs font-medium px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 ${
-                    isSelected
-                      ? 'bg-lavender text-white border-lavender font-bold shadow-xs'
-                      : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 hover:border-lavender/40'
-                  }`}
-                  onClick={() => {
-                    if (isSelected) setLifeStages(lifeStages.filter((s) => s !== st));
-                    else setLifeStages([...lifeStages, st]);
-                  }}
-                >
-                  {isSelected && <Check size={11} />}
-                  <span>{st}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Field(s) / Domain(s) */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Briefcase size={13} className="text-lavender" />
-              Field / Area of Focus
-            </span>
-            <span className="text-[10px] text-text-muted font-normal">Select multiple</span>
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            {CAREER_FIELD_OPTIONS.map((field) => {
-              const isSelected = careerFields.includes(field);
-              return (
-                <button
-                  key={field}
-                  type="button"
-                  className={`text-xs font-medium px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 ${
-                    isSelected
-                      ? 'bg-lavender text-white border-lavender font-bold shadow-xs'
-                      : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 hover:border-lavender/40'
-                  }`}
-                  onClick={() => {
-                    if (isSelected) setCareerFields(careerFields.filter((f) => f !== field));
-                    else setCareerFields([...careerFields, field]);
-                  }}
-                >
-                  {isSelected && <Check size={11} />}
-                  <span>{field}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Current Focus(es) */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Target size={13} className="text-lavender" />
-              Primary Goals & Focus Right Now
-            </span>
-            <span className="text-[10px] text-text-muted font-normal">Select multiple</span>
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            {FOCUS_OPTIONS.map((fc) => {
-              const isSelected = currentFocuses.includes(fc);
-              return (
-                <button
-                  key={fc}
-                  type="button"
-                  className={`text-xs font-medium px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 ${
-                    isSelected
-                      ? 'bg-lavender text-white border-lavender font-bold shadow-xs'
-                      : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 hover:border-lavender/40'
-                  }`}
-                  onClick={() => {
-                    if (isSelected) setCurrentFocuses(currentFocuses.filter((f) => f !== fc));
-                    else setCurrentFocuses([...currentFocuses, fc]);
-                  }}
-                >
-                  {isSelected && <Check size={11} />}
-                  <span>{fc}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Tone / Style(s) */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Smile size={13} className="text-lavender" />
-              Companion Tone & Style
-            </span>
-            <span className="text-[10px] text-text-muted font-normal">Select any</span>
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {SUPPORT_STYLE_OPTIONS.map((sty) => {
-              const isSelected = supportStyles.includes(sty.id as any);
-              return (
-                <button
-                  key={sty.id}
-                  type="button"
-                  className={`text-left p-2.5 rounded-xl border transition-all ${
-                    isSelected
-                      ? 'bg-lavender/10 dark:bg-lavender/20 border-lavender font-bold shadow-xs ring-2 ring-lavender/40'
-                      : 'bg-surface dark:bg-dark-surface border-border/40 hover:border-lavender/40'
-                  }`}
-                  onClick={() => {
-                    if (isSelected) {
-                      if (supportStyles.length > 1) {
-                        setSupportStyles(supportStyles.filter((s) => s !== sty.id));
-                      }
-                    } else {
-                      setSupportStyles([...supportStyles, sty.id as any]);
-                    }
-                  }}
-                >
-                  <div className="text-xs font-bold text-text-primary dark:text-dark-text flex items-center justify-between">
-                    <span>{sty.label}</span>
-                    {isSelected && <Check size={12} className="text-lavender" />}
-                  </div>
-                  <div className="text-[10px] text-text-muted dark:text-dark-text-muted">{sty.desc}</div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Tiny Sparks Toggle & Topics */}
-        <div className="pt-2 border-t border-border/40 dark:border-dark-border/40 space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-text-primary dark:text-dark-text flex items-center gap-1.5">
-              <Lightbulb size={13} className="text-amber-500" />
-              Include Sourced "Tiny Sparks"
-            </label>
-            <input
-              type="checkbox"
-              className="toggle"
-              checked={triviaEnabled}
-              onChange={(e) => setTriviaEnabled(e.target.checked)}
-            />
-          </div>
-          {triviaEnabled && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {INTEREST_OPTIONS.map((item) => {
-                const isSelected = interests.includes(item.id);
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`text-xs font-medium px-2.5 py-1 rounded-xl border transition-all flex items-center gap-1 ${
-                      isSelected
-                        ? 'bg-lavender text-white border-lavender shadow-xs font-bold'
-                        : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 hover:border-lavender/40'
-                    }`}
-                    onClick={() => {
-                      if (isSelected) setInterests(interests.filter((i) => i !== item.id));
-                      else setInterests([...interests, item.id]);
-                    }}
-                  >
-                    <span>{item.emoji}</span>
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Modal Buttons */}
-        <div className="flex gap-2 pt-2">
-          <button type="button" className="btn-ghost flex-1 text-xs py-2.5" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="flex-1 btn-primary text-xs py-2.5 font-bold flex items-center justify-center gap-1.5"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : savedSuccess ? (
-              <>
-                <Check size={14} /> Saved!
-              </>
-            ) : (
-              'Save Preferences'
-            )}
-          </button>
-        </div>
-      </div>
     </div>
   );
 };
@@ -591,14 +309,12 @@ const CalendarRangePicker: React.FC<{
 /* ── Main Insights Page Component ──────────────────────────── */
 export const InsightsPage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
-  const { personalisation } = usePersonalisation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputQuestion, setInputQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [activePreset, setActivePreset] = useState<RangePreset>('all');
   const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [showPersonaModal, setShowPersonaModal] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -710,29 +426,17 @@ export const InsightsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {messages.length > 0 && (
           <button
             type="button"
-            onClick={() => setShowPersonaModal(true)}
-            className="flex items-center gap-1.5 text-xs text-lavender-dark dark:text-lavender font-semibold px-3 py-1.5 rounded-xl border border-lavender/40 hover:bg-lavender/10 transition-all bg-lavender/5"
-            title="Personalise companion style"
+            onClick={handleClearThread}
+            className="flex items-center gap-1.5 text-xs text-text-muted hover:text-lavender font-medium px-3 py-1.5 rounded-xl border border-border/40 hover:border-lavender/40 transition-all bg-surface/50 dark:bg-dark-surface/50"
+            title="Start a fresh conversation"
           >
-            <SlidersHorizontal size={13} />
-            <span className="hidden sm:inline">My Context</span>
+            <RotateCcw size={13} />
+            <span>New Chat</span>
           </button>
-
-          {messages.length > 0 && (
-            <button
-              type="button"
-              onClick={handleClearThread}
-              className="flex items-center gap-1.5 text-xs text-text-muted hover:text-lavender font-medium px-3 py-1.5 rounded-xl border border-border/40 hover:border-lavender/40 transition-all bg-surface/50 dark:bg-dark-surface/50"
-              title="Start a fresh conversation"
-            >
-              <RotateCcw size={13} />
-              <span>New Chat</span>
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Optional Timeline Filter Bar */}
@@ -889,11 +593,6 @@ export const InsightsPage: React.FC = () => {
       <p className="text-[11px] text-center text-text-muted dark:text-dark-text-muted italic pt-2">
         🌸 Mewwmory reflections are heartfelt personal observations based on your private journal logs, not medical advice.
       </p>
-
-      {/* Personalisation Modal */}
-      {showPersonaModal && (
-        <PersonalisationModal onClose={() => setShowPersonaModal(false)} />
-      )}
 
       {/* Calendar Range Modal */}
       {showCalendar && (
