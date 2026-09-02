@@ -299,7 +299,7 @@ export const PlannerPage: React.FC = () => {
       {showResetConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fade-in">
           <div 
-            className="bg-white dark:bg-dark-card border border-border/80 dark:border-dark-border rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-scale-up"
+            className="bg-white dark:bg-dark-surface border border-border/80 dark:border-dark-border rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 animate-scale-up"
             role="dialog"
             aria-modal="true"
           >

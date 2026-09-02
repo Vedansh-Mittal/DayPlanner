@@ -286,7 +286,7 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
               {availablePresets.map((p) => (
                 <div
                   key={p.name}
-                  className="inline-flex items-center gap-1 bg-lavender/15 hover:bg-lavender/25 dark:bg-dark-card border border-lavender/30 hover:border-lavender rounded-full pl-3 pr-1.5 py-1 text-xs transition-all shadow-xs"
+                  className="inline-flex items-center gap-1 bg-lavender/15 hover:bg-lavender/25 dark:bg-dark-surface border border-lavender/30 hover:border-lavender rounded-full pl-3 pr-1.5 py-1 text-xs transition-all shadow-xs"
                 >
                   <button
                     type="button"

@@ -54,7 +54,7 @@ function renderInlineTokens(text: string) {
       return (
         <span
           key={i}
-          className="italic font-serif text-lavender-dark dark:text-lavender-light bg-lavender/10 dark:bg-lavender/20 px-1.5 py-0.5 rounded text-[13px] mx-0.5 inline-block"
+          className="italic font-serif text-lavender-dark dark:text-lavender-light bg-lavender/15 dark:bg-lavender/25 px-1.5 py-0.5 rounded text-[13px] mx-0.5 inline-block border border-lavender/20 dark:border-lavender/30 font-semibold"
         >
           “{quote}”
         </span>
@@ -132,12 +132,12 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
                   return (
                     <div key={pIdx} className="flex items-start gap-2 pl-2">
                       <span className="text-lavender font-bold mt-0.5">•</span>
-                      <p className="flex-1 leading-relaxed">{renderInlineTokens(p)}</p>
+                      <p className="flex-1 leading-relaxed text-text-primary dark:text-dark-text">{renderInlineTokens(p)}</p>
                     </div>
                   );
                 }
                 return (
-                  <p key={pIdx} className="text-sm leading-relaxed text-text-primary dark:text-dark-text">
+                  <p key={pIdx} className="text-sm leading-relaxed text-text-primary dark:text-dark-text font-normal">
                     {renderInlineTokens(p)}
                   </p>
                 );
@@ -179,7 +179,7 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
                 {bulletCards.map((card, cIdx) => (
                   <div
                     key={cIdx}
-                    className="p-3.5 rounded-2xl bg-surface/70 dark:bg-dark-surface/70 border border-border/60 dark:border-dark-border/60 space-y-1 hover:border-lavender/30 transition-colors"
+                    className="p-3.5 rounded-2xl bg-surface/90 dark:bg-dark-surface-raised border border-border/70 dark:border-dark-border/80 space-y-1 hover:border-lavender/30 transition-colors shadow-xs"
                   >
                     {card.title && (
                       <div className="font-bold text-xs text-text-primary dark:text-dark-text flex items-center gap-1.5">
@@ -202,13 +202,13 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
           return (
             <div
               key={sIdx}
-              className="p-4 rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 dark:border-emerald-500/25 space-y-1.5 shadow-xs"
+              className="p-4 rounded-2xl bg-emerald-500/10 dark:bg-emerald-950/50 border border-emerald-500/30 dark:border-emerald-500/40 space-y-1.5 shadow-xs"
             >
               <div className="font-bold text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
-                <Target size={14} className="text-emerald-500" />
+                <Target size={14} className="text-emerald-500 dark:text-emerald-400" />
                 <span>One Small Next Step</span>
               </div>
-              <div className="text-xs text-text-primary dark:text-dark-text leading-relaxed space-y-1">
+              <div className="text-xs text-emerald-950 dark:text-emerald-100 font-medium leading-relaxed space-y-1">
                 {sec.items.map((it, itIdx) => (
                   <p key={itIdx}>{renderInlineTokens(it)}</p>
                 ))}
@@ -222,21 +222,21 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
           return (
             <div
               key={sIdx}
-              className="p-4 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 dark:border-amber-500/25 space-y-2 shadow-xs"
+              className="p-4 rounded-2xl bg-amber-500/10 dark:bg-amber-950/50 border border-amber-500/30 dark:border-amber-500/40 space-y-2 shadow-xs"
             >
               <div className="font-bold text-xs uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
-                <Lightbulb size={14} className="text-amber-500" />
+                <Lightbulb size={14} className="text-amber-500 dark:text-amber-400" />
                 <span>✨ Tiny Spark</span>
               </div>
-              <div className="text-xs text-text-primary dark:text-dark-text leading-relaxed space-y-1">
+              <div className="text-xs text-amber-950 dark:text-amber-100 font-medium leading-relaxed space-y-1">
                 {sec.items.map((it, itIdx) => (
                   <p key={itIdx}>{renderInlineTokens(it)}</p>
                 ))}
               </div>
               {sec.source && (
-                <div className="pt-1 flex items-center gap-1 text-[11px] text-amber-700/80 dark:text-amber-400/80 font-medium">
-                  <span className="opacity-60">Source:</span>
-                  <span className="bg-amber-500/15 dark:bg-amber-500/25 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                <div className="pt-1 flex items-center gap-1 text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                  <span className="opacity-75">Source:</span>
+                  <span className="bg-amber-500/20 dark:bg-amber-400/20 px-2 py-0.5 rounded-full text-[10px] font-semibold border border-amber-500/30 text-amber-900 dark:text-amber-200">
                     {sec.source}
                   </span>
                 </div>
@@ -314,7 +314,7 @@ const CalendarRangePicker: React.FC<{
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
       <div
-        className="bg-white dark:bg-dark-card border border-border/80 dark:border-dark-border rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4 animate-scale-up"
+        className="bg-white dark:bg-dark-surface border border-border/80 dark:border-dark-border rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4 animate-scale-up"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -565,7 +565,7 @@ export const InsightsPage: React.FC = () => {
               className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-all tap-spring ${
                 activePreset === key
                   ? 'bg-lavender text-white border-lavender shadow-xs'
-                  : 'bg-white/80 dark:bg-dark-card/80 text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border/40 hover:border-lavender/40'
+                  : 'bg-white/80 dark:bg-dark-surface/80 text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border/40 hover:border-lavender/40'
               }`}
               onClick={() => handlePresetClick(key)}
             >
@@ -596,8 +596,8 @@ export const InsightsPage: React.FC = () => {
               <div
                 className={`max-w-[88%] rounded-3xl p-4 sm:p-5 shadow-xs transition-all ${
                   msg.role === 'user'
-                    ? 'bg-lavender text-white rounded-br-md font-medium text-sm leading-relaxed shadow-sm ml-8'
-                    : 'bg-white dark:bg-dark-card border border-border/80 dark:border-dark-border text-text-primary dark:text-dark-text rounded-bl-md space-y-3 mr-8'
+                    ? 'bg-lavender dark:bg-lavender-dark text-white rounded-br-md font-medium text-sm leading-relaxed shadow-sm ml-8'
+                    : 'bg-white dark:bg-dark-surface border border-border/80 dark:border-dark-border text-text-primary dark:text-dark-text rounded-bl-md space-y-3 mr-8 shadow-sm'
                 }`}
               >
                 {msg.role === 'user' ? (
@@ -663,7 +663,7 @@ export const InsightsPage: React.FC = () => {
 
       {/* Input Form Bar */}
       <div className="sticky bottom-4 z-20 pt-2">
-        <div className="flex gap-2 bg-white/90 dark:bg-dark-card/90 backdrop-blur-md p-2 rounded-3xl border border-border/80 dark:border-dark-border shadow-lg">
+        <div className="flex gap-2 bg-white/90 dark:bg-dark-surface/90 backdrop-blur-md p-2 rounded-3xl border border-border/80 dark:border-dark-border shadow-lg">
           <input
             ref={inputRef}
             type="text"
