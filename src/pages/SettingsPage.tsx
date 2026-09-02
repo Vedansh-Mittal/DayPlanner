@@ -9,8 +9,10 @@ import { getAllTimezones } from '../lib/utils';
 import {
   Settings as SettingsIcon, User, Globe, Clock, Droplets, Bell,
   Palette, LogOut, Trash2, Loader2, Check, Sun, Moon, Monitor,
-  Download, Upload, FileText, Sparkles, Compass, Target, Lightbulb, Smile, BookOpen, Briefcase
+  Download, Upload, FileText, Sparkles, Compass, Target, Lightbulb, Smile, BookOpen, Briefcase,
+  Smartphone, Share2, PlusSquare
 } from 'lucide-react';
+import { usePwaInstall } from '../hooks/usePwaInstall';
 import { subscribeToPush, unsubscribeFromPush } from '../lib/push';
 import {
   LIFE_STAGE_OPTIONS,
@@ -42,6 +44,8 @@ export const SettingsPage: React.FC = () => {
   const [emailReminders, setEmailReminders] = useState(settings?.email_reminders || false);
   const [pushRemindersEnabled, setPushRemindersEnabled] = useState(settings?.push_reminders_enabled || false);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const { isStandalone, isIOS, canInstallPrompt, install: installPwa } = usePwaInstall();
+  const [isInstallingPwa, setIsInstallingPwa] = useState(false);
 
   // Personalisation states (Multi-select)
   const [lifeStages, setLifeStages] = useState<string[]>([]);
@@ -822,7 +826,94 @@ export const SettingsPage: React.FC = () => {
           <p className="text-xs text-text-muted dark:text-dark-text-muted pl-7">
             Push reminders are delivered directly to your device (desktop or mobile) and require browser notification permission. Ensure you are using a supported browser.
           </p>
+
+          {isIOS && !isStandalone && (
+            <div className="ml-7 mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+              <Smartphone size={15} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+              <div>
+                <span className="font-bold">iPhone / iPad Requirement:</span> Apple requires you to install Daylight to your Home Screen first (Safari → Share <Share2 size={12} className="inline mx-0.5 text-blue-500" /> → <strong>Add to Home Screen</strong>) before iOS permits push notifications.
+              </div>
+            </div>
+          )}
         </div>
+      </section>
+
+      {/* Install App on Device */}
+      <section className="card space-y-3.5">
+        <div className="flex items-center justify-between">
+          <h2 className="section-title">
+            <Smartphone size={18} className="text-lavender" />
+            Install App on Device
+          </h2>
+          {isStandalone && (
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <Check size={12} /> Installed
+            </span>
+          )}
+        </div>
+
+        {isStandalone ? (
+          <p className="text-xs text-text-secondary dark:text-dark-text-secondary">
+            Daylight is running as an installed standalone app on this device. You enjoy full-screen immersion, offline caching, and native notification support.
+          </p>
+        ) : isIOS ? (
+          <div className="space-y-3 text-xs">
+            <p className="text-text-secondary dark:text-dark-text-secondary">
+              Install Daylight on your iPhone or iPad for full-screen view and daily lock-screen reminder notifications:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="p-3 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border/50 dark:border-dark-border/50 flex items-start gap-2.5">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-lavender/30 text-lavender-dark dark:text-lavender font-bold text-xs shrink-0">1</span>
+                <div>
+                  <p className="font-semibold text-text-primary dark:text-dark-text flex items-center gap-1">
+                    Open in Safari & Tap Share <Share2 size={13} className="text-blue-500" />
+                  </p>
+                  <p className="text-text-muted dark:text-dark-text-muted text-[11px] mt-0.5">
+                    At the bottom of Safari, tap the Share icon.
+                  </p>
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border/50 dark:border-dark-border/50 flex items-start gap-2.5">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-lavender/30 text-lavender-dark dark:text-lavender font-bold text-xs shrink-0">2</span>
+                <div>
+                  <p className="font-semibold text-text-primary dark:text-dark-text flex items-center gap-1">
+                    Tap "Add to Home Screen" <PlusSquare size={13} className="text-emerald-500" />
+                  </p>
+                  <p className="text-text-muted dark:text-dark-text-muted text-[11px] mt-0.5">
+                    Scroll down and tap <strong>Add</strong> in the top-right corner.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 text-xs">
+            <p className="text-text-secondary dark:text-dark-text-secondary">
+              Install Daylight directly onto your home screen or desktop for rapid offline access and reminder support:
+            </p>
+            {canInstallPrompt ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsInstallingPwa(true);
+                  await installPwa();
+                  setIsInstallingPwa(false);
+                }}
+                disabled={isInstallingPwa}
+                className="px-4 py-2.5 rounded-xl bg-lavender-dark dark:bg-lavender text-white dark:text-dark-bg font-bold flex items-center gap-2 hover:shadow active:scale-95 transition-all"
+              >
+                <Download size={15} />
+                <span>{isInstallingPwa ? 'Installing…' : 'Install Daylight App'}</span>
+              </button>
+            ) : (
+              <div className="p-3 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border/50 dark:border-dark-border/50">
+                <p className="text-text-muted dark:text-dark-text-muted">
+                  To install, open your browser menu (<strong>⋮</strong> or <strong>⋯</strong>) and select <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Water goal */}

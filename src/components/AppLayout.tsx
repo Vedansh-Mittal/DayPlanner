@@ -4,6 +4,7 @@ import { Sun, Calendar, BarChart3, Settings, LogOut, Sparkles } from 'lucide-rea
 import { useAuthStore } from '../stores/auth-store';
 import { useUserSettings } from '../hooks/useUserSettings';
 import { Navigate } from 'react-router-dom';
+import { PwaInstallBanner } from './PwaInstallBanner';
 
 const NAV_ITEMS = [
   { to: '/app', label: 'Today', icon: Sun, end: true },
@@ -161,6 +162,7 @@ export const AppLayout: React.FC = () => {
       {/* Main content */}
       <main className="flex-1 pb-20 md:pb-4 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6">
+          <PwaInstallBanner />
           <Outlet />
         </div>
       </main>
