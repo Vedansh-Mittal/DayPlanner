@@ -17,11 +17,15 @@ export interface UserSettings {
 
 export interface UserPersonalisation {
   user_id: string;
-  life_stage: string | null;
-  career_field: string | null;
-  current_focus: string | null;
+  life_stage?: string | null;
+  life_stages: string[];
+  career_field?: string | null;
+  career_fields: string[];
+  current_focus?: string | null;
+  current_focuses: string[];
   interests: string[];
-  support_style: 'gentle' | 'cheerful' | 'direct' | 'playful';
+  support_style?: 'gentle' | 'cheerful' | 'direct' | 'playful';
+  support_styles: ('gentle' | 'cheerful' | 'direct' | 'playful')[];
   personalisation_enabled: boolean;
   trivia_enabled: boolean;
   created_at: string;

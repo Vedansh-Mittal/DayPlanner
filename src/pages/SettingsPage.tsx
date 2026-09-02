@@ -43,13 +43,13 @@ export const SettingsPage: React.FC = () => {
   const [pushRemindersEnabled, setPushRemindersEnabled] = useState(settings?.push_reminders_enabled || false);
   const [hasInitialized, setHasInitialized] = useState(false);
 
-  // Personalisation states
-  const [lifeStage, setLifeStage] = useState<string | null>(null);
-  const [careerField, setCareerField] = useState<string>('');
+  // Personalisation states (Multi-select)
+  const [lifeStages, setLifeStages] = useState<string[]>([]);
+  const [careerFields, setCareerFields] = useState<string[]>([]);
   const [customField, setCustomField] = useState<string>('');
-  const [currentFocus, setCurrentFocus] = useState<string | null>(null);
+  const [currentFocuses, setCurrentFocuses] = useState<string[]>([]);
   const [interests, setInterests] = useState<string[]>([]);
-  const [supportStyle, setSupportStyle] = useState<'gentle' | 'cheerful' | 'direct' | 'playful'>('gentle');
+  const [supportStyles, setSupportStyles] = useState<('gentle' | 'cheerful' | 'direct' | 'playful')[]>(['gentle']);
   const [personalisationEnabled, setPersonalisationEnabled] = useState<boolean>(true);
   const [triviaEnabled, setTriviaEnabled] = useState<boolean>(true);
 
@@ -298,18 +298,16 @@ export const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     if (personalisation) {
-      setLifeStage(personalisation.life_stage);
-      if (personalisation.career_field) {
-        if (CAREER_FIELD_OPTIONS.includes(personalisation.career_field as any)) {
-          setCareerField(personalisation.career_field);
-        } else {
-          setCareerField('Other');
-          setCustomField(personalisation.career_field);
-        }
+      setLifeStages(personalisation.life_stages || []);
+      setCareerFields(personalisation.career_fields || []);
+      const knownFields = CAREER_FIELD_OPTIONS as readonly string[];
+      const customOnes = (personalisation.career_fields || []).filter((f) => !knownFields.includes(f) && f !== 'Other');
+      if (customOnes.length) {
+        setCustomField(customOnes.join(', '));
       }
-      setCurrentFocus(personalisation.current_focus);
+      setCurrentFocuses(personalisation.current_focuses || []);
       setInterests(personalisation.interests || []);
-      setSupportStyle(personalisation.support_style || 'gentle');
+      setSupportStyles(personalisation.support_styles?.length ? personalisation.support_styles : ['gentle']);
       setPersonalisationEnabled(personalisation.personalisation_enabled !== false);
       setTriviaEnabled(personalisation.trivia_enabled !== false);
     }
@@ -323,7 +321,13 @@ export const SettingsPage: React.FC = () => {
     setSaving(true);
     setSaved(false);
     try {
-      const finalCareer = careerField === 'Other' ? (customField.trim() || 'Other') : careerField;
+      const mergedCareerFields = [...careerFields];
+      if (customField.trim()) {
+        const parts = customField.split(',').map((p) => p.trim()).filter(Boolean);
+        for (const p of parts) {
+          if (!mergedCareerFields.includes(p)) mergedCareerFields.push(p);
+        }
+      }
       await Promise.all([
         updateSettings({
           display_name: displayName || null,
@@ -335,11 +339,11 @@ export const SettingsPage: React.FC = () => {
           push_reminders_enabled: pushRemindersEnabled,
         }),
         updatePersonalisation({
-          life_stage: lifeStage,
-          career_field: finalCareer || null,
-          current_focus: currentFocus,
+          life_stages: lifeStages,
+          career_fields: mergedCareerFields,
+          current_focuses: currentFocuses,
           interests,
-          support_style: supportStyle,
+          support_styles: supportStyles.length ? supportStyles : ['gentle'],
           personalisation_enabled: personalisationEnabled,
           trivia_enabled: triviaEnabled,
         }),
@@ -502,113 +506,165 @@ export const SettingsPage: React.FC = () => {
 
         {personalisationEnabled && (
           <div className="space-y-5 pt-1">
-            {/* Current Path */}
+            {/* Current Path(s) */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center gap-1.5">
-                <Compass size={13} className="text-lavender" />
-                Current Path / Stage
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted flex items-center gap-1.5">
+                  <Compass size={13} className="text-lavender" />
+                  Current Path / Stage
+                </label>
+                <span className="text-[10px] text-text-muted">Multi-select enabled</span>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {LIFE_STAGE_OPTIONS.map((stage) => (
-                  <button
-                    key={stage}
-                    type="button"
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring ${
-                      lifeStage === stage
-                        ? 'bg-lavender text-white border-lavender shadow-xs'
-                        : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
-                    }`}
-                    onClick={() => setLifeStage(lifeStage === stage ? null : stage)}
-                  >
-                    {stage}
-                  </button>
-                ))}
+                {LIFE_STAGE_OPTIONS.map((stage) => {
+                  const isSelected = lifeStages.includes(stage);
+                  return (
+                    <button
+                      key={stage}
+                      type="button"
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring flex items-center gap-1 ${
+                        isSelected
+                          ? 'bg-lavender text-white border-lavender shadow-xs font-bold'
+                          : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
+                      }`}
+                      onClick={() => {
+                        if (isSelected) {
+                          setLifeStages(lifeStages.filter((s) => s !== stage));
+                        } else {
+                          setLifeStages([...lifeStages, stage]);
+                        }
+                      }}
+                    >
+                      {isSelected && <Check size={12} />}
+                      <span>{stage}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Field / Area */}
+            {/* Field(s) / Area(s) */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center gap-1.5">
-                <Briefcase size={13} className="text-lavender" />
-                Field / Area of Focus
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted flex items-center gap-1.5">
+                  <Briefcase size={13} className="text-lavender" />
+                  Field / Area of Focus
+                </label>
+                <span className="text-[10px] text-text-muted">Multi-select enabled</span>
+              </div>
               <div className="flex flex-wrap gap-2 mb-2">
-                {CAREER_FIELD_OPTIONS.map((field) => (
-                  <button
-                    key={field}
-                    type="button"
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring ${
-                      careerField === field
-                        ? 'bg-lavender text-white border-lavender shadow-xs'
-                        : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
-                    }`}
-                    onClick={() => setCareerField(careerField === field ? '' : field)}
-                  >
-                    {field}
-                  </button>
-                ))}
+                {CAREER_FIELD_OPTIONS.map((field) => {
+                  const isSelected = careerFields.includes(field);
+                  return (
+                    <button
+                      key={field}
+                      type="button"
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring flex items-center gap-1 ${
+                        isSelected
+                          ? 'bg-lavender text-white border-lavender shadow-xs font-bold'
+                          : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
+                      }`}
+                      onClick={() => {
+                        if (isSelected) {
+                          setCareerFields(careerFields.filter((f) => f !== field));
+                        } else {
+                          setCareerFields([...careerFields, field]);
+                        }
+                      }}
+                    >
+                      {isSelected && <Check size={12} />}
+                      <span>{field}</span>
+                    </button>
+                  );
+                })}
               </div>
-              {careerField === 'Other' && (
-                <input
-                  type="text"
-                  className="input-field text-xs py-2"
-                  placeholder="Specify your field (e.g. Mechanical Engineering, Content Creation...)"
-                  value={customField}
-                  onChange={(e) => setCustomField(e.target.value)}
-                />
-              )}
+              <input
+                type="text"
+                className="input-field text-xs py-2 mt-1"
+                placeholder="Add custom fields or specializations (comma-separated, e.g. Full-Stack, AI Research, Med-Tech)..."
+                value={customField}
+                onChange={(e) => setCustomField(e.target.value)}
+              />
             </div>
 
-            {/* Current Focus */}
+            {/* Current Focus(es) */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center gap-1.5">
-                <Target size={13} className="text-lavender" />
-                Primary Goal / Focus Right Now
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted flex items-center gap-1.5">
+                  <Target size={13} className="text-lavender" />
+                  Primary Goals & Focus Right Now
+                </label>
+                <span className="text-[10px] text-text-muted">Multi-select enabled</span>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {FOCUS_OPTIONS.map((foc) => (
-                  <button
-                    key={foc}
-                    type="button"
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring ${
-                      currentFocus === foc
-                        ? 'bg-lavender text-white border-lavender shadow-xs'
-                        : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
-                    }`}
-                    onClick={() => setCurrentFocus(currentFocus === foc ? null : foc)}
-                  >
-                    {foc}
-                  </button>
-                ))}
+                {FOCUS_OPTIONS.map((foc) => {
+                  const isSelected = currentFocuses.includes(foc);
+                  return (
+                    <button
+                      key={foc}
+                      type="button"
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring flex items-center gap-1 ${
+                        isSelected
+                          ? 'bg-lavender text-white border-lavender shadow-xs font-bold'
+                          : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
+                      }`}
+                      onClick={() => {
+                        if (isSelected) {
+                          setCurrentFocuses(currentFocuses.filter((f) => f !== foc));
+                        } else {
+                          setCurrentFocuses([...currentFocuses, foc]);
+                        }
+                      }}
+                    >
+                      {isSelected && <Check size={12} />}
+                      <span>{foc}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Preferred Support Style */}
+            {/* Preferred Support Style(s) */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted mb-2 flex items-center gap-1.5">
-                <Smile size={13} className="text-lavender" />
-                Companion Tone & Style
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted flex items-center gap-1.5">
+                  <Smile size={13} className="text-lavender" />
+                  Companion Tone & Style (Select any that fit)
+                </label>
+                <span className="text-[10px] text-text-muted">Multi-select</span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {SUPPORT_STYLE_OPTIONS.map((sty) => (
-                  <button
-                    key={sty.id}
-                    type="button"
-                    className={`text-left p-3 rounded-2xl border transition-all tap-spring ${
-                      supportStyle === sty.id
-                        ? 'bg-lavender/10 dark:bg-lavender/20 border-lavender shadow-xs'
-                        : 'bg-surface dark:bg-dark-surface border-border/40 dark:border-dark-border hover:border-lavender/40'
-                    }`}
-                    onClick={() => setSupportStyle(sty.id as any)}
-                  >
-                    <div className="text-xs font-bold text-text-primary dark:text-dark-text">
-                      {sty.label}
-                    </div>
-                    <div className="text-[11px] text-text-muted dark:text-dark-text-muted mt-0.5">
-                      {sty.desc}
-                    </div>
-                  </button>
-                ))}
+                {SUPPORT_STYLE_OPTIONS.map((sty) => {
+                  const isSelected = supportStyles.includes(sty.id as any);
+                  return (
+                    <button
+                      key={sty.id}
+                      type="button"
+                      className={`text-left p-3 rounded-2xl border transition-all tap-spring ${
+                        isSelected
+                          ? 'bg-lavender/10 dark:bg-lavender/20 border-lavender shadow-xs ring-2 ring-lavender/40'
+                          : 'bg-surface dark:bg-dark-surface border-border/40 dark:border-dark-border hover:border-lavender/40'
+                      }`}
+                      onClick={() => {
+                        if (isSelected) {
+                          if (supportStyles.length > 1) {
+                            setSupportStyles(supportStyles.filter((s) => s !== sty.id));
+                          }
+                        } else {
+                          setSupportStyles([...supportStyles, sty.id as any]);
+                        }
+                      }}
+                    >
+                      <div className="text-xs font-bold text-text-primary dark:text-dark-text flex items-center justify-between">
+                        <span>{sty.label}</span>
+                        {isSelected && <Check size={14} className="text-lavender" />}
+                      </div>
+                      <div className="text-[11px] text-text-muted dark:text-dark-text-muted mt-0.5">
+                        {sty.desc}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

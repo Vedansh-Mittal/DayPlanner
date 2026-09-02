@@ -5,7 +5,7 @@ import { usePersonalisation } from '../hooks/usePersonalisation';
 import { useAuthStore } from '../stores/auth-store';
 import { getAllTimezones } from '../lib/utils';
 import {
-  Sun, Globe, Clock, Droplets, Bell, ArrowRight, Loader2, Sparkles, Compass, Target, Smile
+  Sun, Globe, Clock, Droplets, Bell, ArrowRight, Loader2, Sparkles, Compass, Target, Smile, Check
 } from 'lucide-react';
 import { subscribeToPush, unsubscribeFromPush } from '../lib/push';
 import {
@@ -34,10 +34,10 @@ export const OnboardingPage: React.FC = () => {
   const [waterGoal, setWaterGoal] = useState(8);
   const [pushRemindersEnabled, setPushRemindersEnabled] = useState(false);
 
-  // Optional personalisation
-  const [lifeStage, setLifeStage] = useState<string | null>(null);
-  const [currentFocus, setCurrentFocus] = useState<string | null>(null);
-  const [supportStyle, setSupportStyle] = useState<'gentle' | 'cheerful' | 'direct' | 'playful'>('gentle');
+  // Optional personalisation (Multi-select)
+  const [lifeStages, setLifeStages] = useState<string[]>([]);
+  const [currentFocuses, setCurrentFocuses] = useState<string[]>([]);
+  const [supportStyles, setSupportStyles] = useState<('gentle' | 'cheerful' | 'direct' | 'playful')[]>(['gentle']);
 
   const filteredTz = tzSearch
     ? timezones.filter((tz) => tz.label.toLowerCase().includes(tzSearch.toLowerCase()))
@@ -57,9 +57,9 @@ export const OnboardingPage: React.FC = () => {
           push_reminders_enabled: pushRemindersEnabled,
         }),
         updatePersonalisation({
-          life_stage: lifeStage,
-          current_focus: currentFocus,
-          support_style: supportStyle,
+          life_stages: lifeStages,
+          current_focuses: currentFocuses,
+          support_styles: supportStyles.length ? supportStyles : ['gentle'],
           personalisation_enabled: true,
           trivia_enabled: true,
         }),
@@ -239,77 +239,114 @@ export const OnboardingPage: React.FC = () => {
         <Sparkles size={24} className="text-lavender animate-pulse" />
         <div>
           <h2 className="text-xl font-bold">Make Mewd feel like you 🌸</h2>
-          <p className="text-xs text-text-muted">Optional • Tailors language and examples to your journey</p>
+          <p className="text-xs text-text-muted">Optional • Select multiple that fit you</p>
         </div>
       </div>
 
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-1.5 flex items-center gap-1">
-          <Compass size={12} className="text-lavender" />
-          Current Path / Stage
+        <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-1.5 flex items-center justify-between">
+          <span className="flex items-center gap-1">
+            <Compass size={12} className="text-lavender" />
+            Current Path / Stage
+          </span>
+          <span className="text-[10px] text-text-muted">Select multiple</span>
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {LIFE_STAGE_OPTIONS.map((st) => (
-            <button
-              key={st}
-              type="button"
-              className={`text-xs font-medium px-2.5 py-1.5 rounded-xl border transition-all ${
-                lifeStage === st
-                  ? 'bg-lavender text-white border-lavender font-bold shadow-xs'
-                  : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 hover:border-lavender/40'
-              }`}
-              onClick={() => setLifeStage(lifeStage === st ? null : st)}
-            >
-              {st}
-            </button>
-          ))}
+          {LIFE_STAGE_OPTIONS.map((st) => {
+            const isSelected = lifeStages.includes(st);
+            return (
+              <button
+                key={st}
+                type="button"
+                className={`text-xs font-medium px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 ${
+                  isSelected
+                    ? 'bg-lavender text-white border-lavender font-bold shadow-xs'
+                    : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 hover:border-lavender/40'
+                }`}
+                onClick={() => {
+                  if (isSelected) setLifeStages(lifeStages.filter((s) => s !== st));
+                  else setLifeStages([...lifeStages, st]);
+                }}
+              >
+                {isSelected && <Check size={11} />}
+                <span>{st}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-1.5 flex items-center gap-1">
-          <Target size={12} className="text-lavender" />
-          Primary Focus
+        <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-1.5 flex items-center justify-between">
+          <span className="flex items-center gap-1">
+            <Target size={12} className="text-lavender" />
+            Primary Focus(es)
+          </span>
+          <span className="text-[10px] text-text-muted">Select multiple</span>
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {FOCUS_OPTIONS.slice(0, 5).map((fc) => (
-            <button
-              key={fc}
-              type="button"
-              className={`text-xs font-medium px-2.5 py-1.5 rounded-xl border transition-all ${
-                currentFocus === fc
-                  ? 'bg-lavender text-white border-lavender font-bold shadow-xs'
-                  : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 hover:border-lavender/40'
-              }`}
-              onClick={() => setCurrentFocus(currentFocus === fc ? null : fc)}
-            >
-              {fc}
-            </button>
-          ))}
+          {FOCUS_OPTIONS.slice(0, 6).map((fc) => {
+            const isSelected = currentFocuses.includes(fc);
+            return (
+              <button
+                key={fc}
+                type="button"
+                className={`text-xs font-medium px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 ${
+                  isSelected
+                    ? 'bg-lavender text-white border-lavender font-bold shadow-xs'
+                    : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 hover:border-lavender/40'
+                }`}
+                onClick={() => {
+                  if (isSelected) setCurrentFocuses(currentFocuses.filter((f) => f !== fc));
+                  else setCurrentFocuses([...currentFocuses, fc]);
+                }}
+              >
+                {isSelected && <Check size={11} />}
+                <span>{fc}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-1.5 flex items-center gap-1">
-          <Smile size={12} className="text-lavender" />
-          Companion Tone
+        <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-1.5 flex items-center justify-between">
+          <span className="flex items-center gap-1">
+            <Smile size={12} className="text-lavender" />
+            Companion Tone(s)
+          </span>
+          <span className="text-[10px] text-text-muted">Select any</span>
         </label>
         <div className="grid grid-cols-2 gap-2">
-          {SUPPORT_STYLE_OPTIONS.map((sty) => (
-            <button
-              key={sty.id}
-              type="button"
-              className={`text-left p-2.5 rounded-xl border transition-all ${
-                supportStyle === sty.id
-                  ? 'bg-lavender/10 dark:bg-lavender/20 border-lavender font-bold shadow-xs'
-                  : 'bg-surface dark:bg-dark-surface border-border/40 hover:border-lavender/40'
-              }`}
-              onClick={() => setSupportStyle(sty.id as any)}
-            >
-              <div className="text-xs font-bold text-text-primary dark:text-dark-text">{sty.label}</div>
-              <div className="text-[10px] text-text-muted dark:text-dark-text-muted">{sty.desc}</div>
-            </button>
-          ))}
+          {SUPPORT_STYLE_OPTIONS.map((sty) => {
+            const isSelected = supportStyles.includes(sty.id as any);
+            return (
+              <button
+                key={sty.id}
+                type="button"
+                className={`text-left p-2.5 rounded-xl border transition-all ${
+                  isSelected
+                    ? 'bg-lavender/10 dark:bg-lavender/20 border-lavender font-bold shadow-xs ring-2 ring-lavender/40'
+                    : 'bg-surface dark:bg-dark-surface border-border/40 hover:border-lavender/40'
+                }`}
+                onClick={() => {
+                  if (isSelected) {
+                    if (supportStyles.length > 1) {
+                      setSupportStyles(supportStyles.filter((s) => s !== sty.id));
+                    }
+                  } else {
+                    setSupportStyles([...supportStyles, sty.id as any]);
+                  }
+                }}
+              >
+                <div className="text-xs font-bold text-text-primary dark:text-dark-text flex items-center justify-between">
+                  <span>{sty.label}</span>
+                  {isSelected && <Check size={12} className="text-lavender" />}
+                </div>
+                <div className="text-[10px] text-text-muted dark:text-dark-text-muted">{sty.desc}</div>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>,

@@ -95,40 +95,61 @@ function formatJournalEntries(entries: any[]): string {
 /* ── Build System Prompt with User Personalisation ───────────── */
 function buildSystemPrompt(persona: any, displayName?: string | null): string {
   const isEnabled = persona?.personalisation_enabled !== false;
-  const lifeStage = isEnabled ? persona?.life_stage || 'Not specified' : 'Not specified';
-  const careerField = isEnabled ? persona?.career_field || 'Not specified' : 'Not specified';
-  const currentFocus = isEnabled ? persona?.current_focus || 'Not specified' : 'Not specified';
+  
+  // Format multi-select lists
+  const rawLifeStages = Array.isArray(persona?.life_stages) && persona.life_stages.length
+    ? persona.life_stages
+    : (persona?.life_stage ? [persona.life_stage] : []);
+  const lifeStages = isEnabled && rawLifeStages.length ? rawLifeStages.join(', ') : 'Not specified';
+
+  const rawCareerFields = Array.isArray(persona?.career_fields) && persona.career_fields.length
+    ? persona.career_fields
+    : (persona?.career_field ? [persona.career_field] : []);
+  const careerFields = isEnabled && rawCareerFields.length ? rawCareerFields.join(', ') : 'Not specified';
+
+  const rawFocuses = Array.isArray(persona?.current_focuses) && persona.current_focuses.length
+    ? persona.current_focuses
+    : (persona?.current_focus ? [persona.current_focus] : []);
+  const currentFocuses = isEnabled && rawFocuses.length ? rawFocuses.join(', ') : 'Not specified';
+
   const interests = isEnabled && Array.isArray(persona?.interests) && persona.interests.length ? persona.interests.join(', ') : 'technology, psychology, science';
-  const supportStyle = isEnabled ? persona?.support_style || 'gentle' : 'gentle';
+
+  const rawStyles = Array.isArray(persona?.support_styles) && persona.support_styles.length
+    ? persona.support_styles
+    : (persona?.support_style ? [persona.support_style] : ['gentle']);
+  const supportStyles = isEnabled && rawStyles.length ? rawStyles.join(', ') : 'gentle';
+
   const triviaEnabled = isEnabled ? persona?.trivia_enabled !== false : false;
 
-  let styleGuidance = 'Write with gentle, compassionate, soothing empathy.';
-  if (supportStyle === 'cheerful') styleGuidance = 'Write with upbeat, warm, playful encouragement and bright optimism.';
-  if (supportStyle === 'direct') styleGuidance = 'Write with clear, concise, direct, practical, and action-oriented feedback.';
-  if (supportStyle === 'playful') styleGuidance = 'Write with witty, lighthearted, friendly humor and relatable meme-ish charm.';
+  const styleDescriptions: string[] = [];
+  if (rawStyles.includes('gentle')) styleDescriptions.push('gentle, compassionate, soothing empathy');
+  if (rawStyles.includes('cheerful')) styleDescriptions.push('upbeat, encouraging, warm optimism');
+  if (rawStyles.includes('direct')) styleDescriptions.push('clear, concise, direct, action-oriented feedback');
+  if (rawStyles.includes('playful')) styleDescriptions.push('witty, lighthearted, friendly humor and charm');
+  const styleGuidance = styleDescriptions.join(' combined with ') || 'gentle and empathetic';
 
   return `You are Mewwmory Companion, the warm, empathetic, and deeply observant private journaling companion inside Daylight Planner.
 You are having an intimate conversation with ${displayName ? displayName : 'the author'} about their personal journal entries.
 
-USER PROFILE CONTEXT (Use strictly for tone, relatable metaphors, and tailored examples — NEVER fabricate journal facts):
-- Current Path / Stage: ${lifeStage}
-- Field / Area: ${careerField}
-- Primary Focus: ${currentFocus}
-- Interests: ${interests}
-- Tone / Style Preference: ${supportStyle} (${styleGuidance})
+USER PROFILE CONTEXT (Use strictly for tone, relatable metaphors, and tailored encouragement — NEVER fabricate journal facts):
+- Current Path(s) / Stage(s): ${lifeStages}
+- Field(s) / Area(s): ${careerFields}
+- Primary Focus(es) Right Now: ${currentFocuses}
+- Interests for Connections/Trivia: ${interests}
+- Tone / Style Preference(s): ${supportStyles} (${styleGuidance})
 - Trivia / Tiny Sparks Enabled: ${triviaEnabled ? 'YES' : 'NO'}
 
 CORE PERSONALITY & PRINCIPLES:
 1. Always answer the user's specific question directly in the very first sentence.
 2. Ground all claims in their actual logged entries. Quote their exact words in quotes (e.g. "Stressful", "Accenture", "chair for back pain").
 3. When they share vulnerability, frustration, or harsh self-talk (e.g. "I need to get my ass together"), validate their feelings tenderly without being preachy.
-4. Adapt your advice and metaphors to their stage (e.g. if they are studying/preparing for placements, acknowledge academic stamina; if working professional, acknowledge boundary-setting).
+4. Adapt your advice and metaphors to their path(s) and focus(es) (e.g. if studying/preparing for placements, acknowledge study stamina and balance; if working or building projects, acknowledge boundary-setting and pacing).
 5. Output clean, beautifully structured Markdown (bold section titles, short 2-3 sentence paragraphs, bullet points). Do NOT output raw JSON.
 
 STRUCTURE YOUR RESPONSE NATURALLY:
 - **Direct Reflection**: Warm, personalized answer directly addressing their prompt.
 - **Patterns & Observations**: Grounded insights connecting their thoughts, habits, and daily entries with specific dates/quotes.
-- **One Small Next Step**: A single bite-sized, practical action or mindset shift tailored to their current focus (${currentFocus}).
+- **One Small Next Step**: A single bite-sized, practical action or mindset shift tailored to their active focus(es) (${currentFocuses}).
 ${triviaEnabled ? `- **✨ Tiny Spark**: A brief, fascinating 1-2 sentence sourced fact or psychological/scientific principle connected to their interests (${interests}) that relates metaphorically to their reflection, with a clear source tag (e.g. [Source: Psychology Today / NASA / MIT Cognitive Science]). Keep it clearly separated at the very end.` : ''}
 
 OFF-TOPIC GUARDRAIL:
