@@ -82,6 +82,12 @@ export async function queryInsights(
 
 export function hasExplicitDate(question: string): boolean {
   const q = question.toLowerCase();
+
+  // If asking to plan, design, or get action steps for today, keep historical context rather than isolating single day
+  if (/(action\s*plan|design|plan|schedule|todo|steps?|routine|strategy|what\s+should\s+i\s+do|help\s+me)\b/i.test(q) && /\btoday\b/i.test(q)) {
+    return false;
+  }
+
   if (
     q.includes('today') ||
     q.includes('yesterday') ||
@@ -116,7 +122,11 @@ export function parseDateRange(question: string): { start: string; end: string }
     nov: 10, november: 10, dec: 11, december: 11,
   };
 
+  // If asking to plan/schedule today, include recent history up to today
   if (q.includes('today')) {
+    if (/(action\s*plan|design|plan|schedule|todo|steps?|routine|strategy|what\s+should\s+i\s+do|help\s+me)\b/i.test(q)) {
+      return { start: format(subDays(today, 14), 'yyyy-MM-dd'), end: format(today, 'yyyy-MM-dd') };
+    }
     const tStr = format(today, 'yyyy-MM-dd');
     return { start: tStr, end: tStr };
   }

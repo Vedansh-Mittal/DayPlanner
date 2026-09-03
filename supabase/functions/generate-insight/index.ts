@@ -323,7 +323,15 @@ DYNAMIC INTENT & OUTPUT RULES (EVALUATE CAREFULLY):
    - Include relatable real-life analogies, developer/student parallels, and psychological context alongside their quoted entries.
    - Balance empathy, psychological insight, and practical clarity.
 
-5. STANDARD REFLECTION REQUEST:
+5. ACTION PLANS & STEP-BY-STEP ROADMAPS:
+   (e.g., "design me a 5 stage action plan", "help me plan today", "what should I focus on?", "give me steps for today", "action plan of today", "plan my day")
+   - Design an empowering, realistic, and highly practical action plan tailored to their active priorities (e.g. Spring Boot, DSA, Accenture prep) and daily energy.
+   - If they logged today's planner, synthesize today's specific intentions with their historical momentum.
+   - If today is not yet logged, synthesize their recent priorities and habits to craft today's plan, starting with a friendly note like: "Looking across your recent priorities and momentum, here is a clear, high-impact action plan for today:"
+   - Format with bold, clear stages or steps (e.g. **Stage 1: ...**, **Stage 2: ...** or **Step 1: ...**).
+   - Keep each step atomic, achievable, and anchored in deep focus sprints (e.g. 30–45 mins).
+
+6. STANDARD REFLECTION REQUEST:
    (e.g., "what do you make of my brain dumps?", "analyze my week", "how have I been doing?", "what patterns do you see?")
    - Warm, personalized opening addressing their question.
    - ### Patterns & Observations
@@ -419,7 +427,22 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Failed to fetch planner entries' }, 500);
     }
 
-    const entries = (rawEntries || []).filter(hasMeaningfulData);
+    let entries = (rawEntries || []).filter(hasMeaningfulData);
+
+    // Graceful Fallback: If a specific date (e.g. today) yielded 0 entries, fetch recent entries so planning/advice succeeds
+    if (entries.length === 0 && startDate && startDate !== 'all') {
+      const { data: fallbackEntries } = await supabase
+        .from('daily_entries')
+        .select('*, priorities(*), action_steps(*), medications(*), meals(*), wind_down_items(*)')
+        .eq('user_id', user.id)
+        .order('entry_date', { ascending: false })
+        .limit(14);
+
+      const validFallback = (fallbackEntries || []).filter(hasMeaningfulData).reverse();
+      if (validFallback.length > 0) {
+        entries = validFallback;
+      }
+    }
 
     if (entries.length === 0) {
       const rangeLabel = startDate && endDate && startDate !== 'all'
