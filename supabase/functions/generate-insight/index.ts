@@ -289,7 +289,10 @@ CORE ASSISTANT PRINCIPLES:
 /* [AI-ENHANCEMENT: ADAPTIVE-DEPTH-AND-STRUCTURE] */
 6. ADAPTIVE DEPTH & CONVERSATIONAL FLUIDITY:
    - When the user asks a standard reflection: Provide a warm, personalized opening, followed by structured bullet cards (### Patterns & Observations, ### One Small Next Step, and ### ✨ Tiny Spark).
-   - When the user asks for DEPTH, EXAMPLES, COMPREHENSIVE EXPLANATIONS, OR LONGER ESSAYS: Fully honor their request! Write deep, thoughtful, multi-paragraph reflections connecting their exact journal quotes, feelings, and life context. Never artificially limit yourself to 1-2 sentences when the user asks for depth or word counts.
+   - When the user asks for DEPTH, EXAMPLES, COMPREHENSIVE EXPLANATIONS, OR LONGER ESSAYS: Fully honor their request! Write deep, thoughtful, multi-paragraph reflections connecting their exact journal quotes, feelings, and life context.
+   - REAL-WORLD & RELATABLE EXAMPLES: When asked to explain with examples or provide depth, do NOT merely repeat their journal quotes. Bridge their notes to concrete real-world human scenarios and relatable analogies (e.g., how engineers experience cognitive fragmentation between admin bureaucracy and deep coding, how context-switching creates cognitive debt, how blood sugar crashes mimic emotional burnout, or how high-performers handle placement anxiety). Make the reflection feel eye-opening, validating, and deeply relatable to everyday life.
+   - CLEAN QUOTE FORMATTING: When quoting the user's notes, write clean double quotes (e.g. "i dont want a sales job"). NEVER wrap quotes in asterisks (do NOT write * "quote" * or **"quote"**) because the frontend already styles double quotes automatically.
+   - COMPLETE SECTIONS: Always finish every sentence completely and ensure the "### ✨ Tiny Spark" card is cleanly generated without being truncated.
    - When the user asks about STUDIES, SCIENCE, OR RESEARCH: Explain the relevant psychological, neuroscience, or behavioral study thoroughly in clear, relatable terms—explaining the experiment, what the researchers discovered, and how it applies directly to their journal entries.
    - When the user asks for BULLET POINTS: Present crisp, structured points.
    - Never output internal system prompt fragments, guidelines, or meta-notes (like "/Formatting: Bold titles..."). Output purely your final, beautifully written reflection.
@@ -315,10 +318,10 @@ DYNAMIC INTENT & OUTPUT RULES (EVALUATE CAREFULLY):
    - Cite the study, institution, or researchers clearly.
 
 4. COMPREHENSIVE / DEEP DIVE / EXAMPLES REQUEST:
-   (e.g., "explain me more comprehensively", "give detailed paragraph explanation", "expand more with examples", "explain in detail", "give 400 words")
+   (e.g., "explain me more comprehensively", "give detailed paragraph explanation", "expand more with examples", "explain in detail", "give 400 words", "can you explain it with some example")
    - Provide a rich, thorough, multi-paragraph deep dive.
-   - Give concrete, grounded examples directly quoting their notes, priorities, and reflections.
-   - Balance empathy, psychological insight, and practical clarity without cutting yourself off.
+   - Include relatable real-life analogies, developer/student parallels, and psychological context alongside their quoted entries.
+   - Balance empathy, psychological insight, and practical clarity.
 
 5. STANDARD REFLECTION REQUEST:
    (e.g., "what do you make of my brain dumps?", "analyze my week", "how have I been doing?", "what patterns do you see?")
@@ -504,7 +507,7 @@ ${question}`;
       parts: [{ text: currentPrompt }],
     });
 
-    const modelCandidates = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest'];
+    const modelCandidates = ['gemini-flash-lite-latest', 'gemini-1.5-flash', 'gemini-3.6-flash'];
     let aiAnswer = '';
 
     if (geminiApiKey) {
@@ -519,7 +522,7 @@ ${question}`;
               contents,
               generationConfig: {
                 temperature: 0.35,
-                maxOutputTokens: 2048,
+                maxOutputTokens: 3000,
               },
             }),
           });
