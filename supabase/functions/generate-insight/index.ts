@@ -113,6 +113,102 @@ function formatJournalEntries(entries: any[]): string {
   }).join('\n\n');
 }
 
+/* [AI-ENHANCEMENT: HABIT-BASELINE-PRECOMPUTE] */
+// Computes longitudinal statistics across all loaded entries to distinguish established routines from one-off anomalies.
+function computeLongitudinalHabitBaseline(entries: any[]): string {
+  if (!entries || entries.length === 0) return 'No entries recorded yet.';
+  const total = entries.length;
+  let breakfastCount = 0;
+  let lunchCount = 0;
+  let dinnerCount = 0;
+  let totalWater = 0;
+  let waterDays = 0;
+  const focusWords = new Map<string, number>();
+
+  for (const e of entries) {
+    if (Array.isArray(e.meals)) {
+      for (const m of e.meals) {
+        if (!m || !m.ate) continue;
+        const type = (m.meal_type || '').toLowerCase();
+        if (type.includes('breakfast')) breakfastCount++;
+        if (type.includes('lunch')) lunchCount++;
+        if (type.includes('dinner')) dinnerCount++;
+      }
+    }
+    if (e.water_count != null && Number(e.water_count) > 0) {
+      totalWater += Number(e.water_count);
+      waterDays++;
+    }
+    if (Array.isArray(e.priorities)) {
+      for (const p of e.priorities) {
+        if (p?.text?.trim()) {
+          const clean = p.text.trim();
+          focusWords.set(clean, (focusWords.get(clean) || 0) + 1);
+        }
+      }
+    }
+  }
+
+  const lines: string[] = [];
+  lines.push(`• Total Logged Check-ins: ${total} days`);
+
+  // Breakfast routine detection
+  if (total >= 2) {
+    const bfRatio = breakfastCount / total;
+    if (bfRatio <= 0.35) {
+      lines.push(`• Breakfast Pattern: Skipped on ${total - breakfastCount} of ${total} logged days (Established routine: Intermittent fasting / developer morning focus flow. Treat skipping breakfast as their NORMAL baseline, NOT as an alarming emergency).`);
+    } else if (bfRatio >= 0.7) {
+      lines.push(`• Breakfast Pattern: Consistently eaten (${breakfastCount} of ${total} logged days).`);
+    } else {
+      lines.push(`• Breakfast Pattern: Varies (${breakfastCount} days eaten out of ${total}).`);
+    }
+  }
+
+  if (waterDays > 0) {
+    const avgWater = (totalWater / waterDays).toFixed(1);
+    lines.push(`• Hydration Baseline: Average ${avgWater} glasses/day across logged days.`);
+  }
+
+  // Top recurring focus items
+  const sortedFocus = Array.from(focusWords.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([w, c]) => `"${w}" (${c}x)`);
+  if (sortedFocus.length > 0) {
+    lines.push(`• Recurring Priority Themes: ${sortedFocus.join(', ')}`);
+  }
+
+  return lines.join('\n');
+}
+
+/* [AI-ENHANCEMENT: HIERARCHICAL-WINDOW-SCALING] */
+// For long-term journals (>14 days), preserves full granular logs for the recent 14 days
+// while compressing older history into an aggregated baseline so prompts remain under ~2,500 tokens forever.
+function prepareHierarchicalJournalContext(entries: any[]): { contextText: string; isScaled: boolean } {
+  const validEntries = entries.filter(hasMeaningfulData);
+  if (validEntries.length <= 14) {
+    return {
+      contextText: formatJournalEntries(validEntries),
+      isScaled: false,
+    };
+  }
+
+  // Split: Older entries vs. Recent 14 entries
+  const recentEntries = validEntries.slice(-14);
+  const olderEntries = validEntries.slice(0, -14);
+
+  const olderSummary = `=== HISTORICAL BASELINE SUMMARY (${olderEntries[0]?.entry_date} to ${olderEntries[olderEntries.length - 1]?.entry_date}, ${olderEntries.length} entries) ===
+${computeLongitudinalHabitBaseline(olderEntries)}
+• Sample Historical Wins: ${olderEntries.filter((e: any) => e.night_win).map((e: any) => `"${e.night_win}"`).slice(-3).join('; ') || 'None recorded'}`;
+
+  const recentDetail = formatJournalEntries(recentEntries);
+
+  return {
+    contextText: `${olderSummary}\n\n=== RECENT GRANULAR LOGS (Last 14 days) ===\n${recentDetail}`,
+    isScaled: true,
+  };
+}
+
 /* ── Build System Prompt with User Personalisation ───────────── */
 function buildSystemPrompt(persona: any, displayName?: string | null, userQuestion?: string): string {
   const isEnabled = persona?.personalisation_enabled !== false;
@@ -182,6 +278,18 @@ CORE ASSISTANT PRINCIPLES:
 1. You are an assistant for their self-reflection, NOT a nagging manager or pushy coach. NEVER volunteer the user's specific priorities, study tasks, or to-dos unprompted. Let the user lead the conversation.
 2. Ground all analytical claims strictly in their actual logged entries. Quote their exact words in quotes (e.g. "Stressful", "chair for back pain").
 3. READABILITY: Keep paragraphs concise (1-2 sentences).
+/* [AI-ENHANCEMENT: HABIT-BASELINE-PRECOMPUTE] */
+4. HABIT BASELINE & ROUTINE RECOGNITION:
+   Review the provided Habit Baseline. If a user consistently demonstrates a recurring habit (such as skipping breakfast or low daytime water), acknowledge it as their established routine (e.g. intermittent fasting or deep developer focus), NOT as an alarming emergency or surprise. Only comment on habits if they genuinely deviate from their established baseline.
+/* [AI-ENHANCEMENT: TEMPORAL-COMPLETENESS-METRIC] */
+5. TEMPORAL COMPLETENESS & TRANSPARENCY:
+   If the prompt indicates missing or unlogged days within the requested window, you MUST explicitly state in your opening that this reflection is based only on the recorded check-ins (e.g. "Reflecting across your 3 logged days out of this 7-day period..."). Never assume skipped logs mean zero food, starvation, or inactivity.
+/* [AI-ENHANCEMENT: HIERARCHICAL-WINDOW-SCALING] */
+6. STRICT CARD BUDGET (NO ESSAYS / NO WALLS OF TEXT):
+   - Opening reflection: 1-2 sentences maximum.
+   - Patterns & Observations: Exactly 2-3 bite-sized bullet cards (each card 1-2 short sentences).
+   - One Small Next Step (if applicable): Exactly 1 atomic, achievable sentence.
+   - ✨ Tiny Spark (if enabled): 1-2 fascinating sentences explaining the insight, followed strictly by "Source: Organization Name" on its own separate line.
 
 DYNAMIC INTENT & OUTPUT RULES (EVALUATE CAREFULLY):
 
@@ -203,9 +311,10 @@ DYNAMIC INTENT & OUTPUT RULES (EVALUATE CAREFULLY):
      (2-3 bite-sized bullet points with bold titles connecting their logged entries)
 ${wantsActionSteps ? `   - ### One Small Next Step
      (1 concrete, atomic action tailored to their focus: ${currentFocuses})` : ''}
+/* [AI-ENHANCEMENT: SPARK-PROMPT-SPECIFICATION] */
 ${triviaEnabled ? `   - ### ✨ Tiny Spark
-     (A fascinating 1-2 sentence sourced principle connected to: ${interests})
-     [Source: Organization Name / Study]` : ''}
+     (Write 1-2 fascinating sentences explaining a real scientific principle, psychological concept, or engineering trivia directly related to: ${interests})
+     Source: Organization / Publication Name (strictly on this separate line below the spark text)` : ''}
 
 OFF-TOPIC GUARDRAIL:
 - If asked a purely academic, coding, or generic trivia question completely unrelated to their journal (e.g. "how to reverse a linkedlist in java"):
@@ -305,7 +414,42 @@ Deno.serve(async (req) => {
       });
     }
 
-    const formattedJournal = formatJournalEntries(entries);
+    /* [AI-ENHANCEMENT: HABIT-BASELINE-PRECOMPUTE] */
+    const habitBaseline = computeLongitudinalHabitBaseline(entries);
+
+    /* [AI-ENHANCEMENT: HIERARCHICAL-WINDOW-SCALING] */
+    const { contextText: formattedJournal, isScaled } = prepareHierarchicalJournalContext(entries);
+
+    /* [AI-ENHANCEMENT: TEMPORAL-COMPLETENESS-METRIC] */
+    let completenessNotice = '';
+    if (startDate && endDate && startDate !== 'all' && endDate !== 'all') {
+      try {
+        const sDate = new Date(startDate);
+        const eDate = new Date(endDate);
+        const diffTime = Math.abs(eDate.getTime() - sDate.getTime());
+        const totalDaysInWindow = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        const loggedCount = entries.length;
+        const missingDaysCount = Math.max(0, totalDaysInWindow - loggedCount);
+
+        if (totalDaysInWindow > 1) {
+          completenessNotice = `[DATASET COMPLETENESS & COVERAGE]
+• Requested Calendar Window: ${startDate} to ${endDate} (${totalDaysInWindow} calendar days)
+• Recorded Check-in Entries: ${loggedCount} days
+• Unrecorded / Skipped Days: ${missingDaysCount} days (${Math.round((loggedCount / totalDaysInWindow) * 100)}% coverage)
+
+CRITICAL INSTRUCTION FOR MISSING DAYS:
+${missingDaysCount > 0
+  ? `- The user recorded logs for ${loggedCount} out of ${totalDaysInWindow} days. You MUST explicitly state in your opening that this reflection covers only the ${loggedCount} recorded days (e.g., "Looking across your ${loggedCount} recorded days in this ${totalDaysInWindow}-day window...").
+- NEVER assume unrecorded days were inactive, zero-calorie, or fasts; simply recognize they were not recorded.`
+  : '- All calendar days in this window have recorded check-ins.'
+}
+`;
+        }
+      } catch (e) {
+        console.warn('Date calculation error:', e);
+      }
+    }
+
     const dateRangeLabel = startDate && endDate && startDate !== 'all'
       ? `${startDate} to ${endDate}`
       : `All entries (${entries[0]?.entry_date} to ${entries[entries.length - 1]?.entry_date})`;
@@ -329,7 +473,10 @@ Deno.serve(async (req) => {
 
     // Current turn with full context
     const currentPrompt = `[JOURNAL CONTEXT]
-TIMEFRAME: ${dateRangeLabel} (${entries.length} logged entries)
+TIMEFRAME: ${dateRangeLabel} (${entries.length} logged entries${isScaled ? ' - Scaled with Hierarchical Summary' : ''})
+
+${completenessNotice ? `${completenessNotice}\n` : ''}[ESTABLISHED HABIT BASELINE]
+${habitBaseline}
 
 JOURNAL ENTRIES:
 ${formattedJournal}
