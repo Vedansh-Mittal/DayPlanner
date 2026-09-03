@@ -96,36 +96,19 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
         currentSection = { type: 'patterns', title: 'Patterns & Observations', items: [] };
       } else if (/next step|action|suggestion/i.test(rawTitle)) {
         currentSection = { type: 'next_step', title: 'One Small Next Step', items: [] };
-      /* [AI-ENHANCEMENT: SPARK-PARSER-FIX] */
       } else if (/spark|trivia|side note/i.test(rawTitle)) {
         currentSection = { type: 'spark', title: '✨ Tiny Spark', items: [] };
-        // If header itself contained content after the title (e.g. "### ✨ Tiny Spark: ...")
-        const headerExtra = rawTitle.replace(/^(?:✨\s*)?(?:tiny\s*spark|trivia|side\s*note)[:\s-]*/i, '').trim();
-        if (headerExtra) {
-          currentSection.items.push(headerExtra);
-        }
       } else {
         currentSection = { type: 'general', title: rawTitle, items: [] };
       }
       continue;
     }
 
-    /* [AI-ENHANCEMENT: SPARK-PARSER-FIX] */
-    // Check for source tags inside spark, but NEVER drop content on the same line!
-    if (currentSection.type === 'spark') {
-      const srcMatch = line.match(/(?:\[?\s*source\s*:\s*([^\]\n]+)\]?)/i);
+    // Check for source tags inside spark
+    if (currentSection.type === 'spark' && /\[?source:\s*([^\]]+)\]?/i.test(line)) {
+      const srcMatch = line.match(/\[?source:\s*([^\]]+)\]?/i);
       if (srcMatch) {
-        if (!currentSection.source) {
-          currentSection.source = srcMatch[1].replace(/\]$/, '').trim();
-        }
-        // Extract any accompanying text from the same line
-        const textWithoutSource = line
-          .replace(/(?:\[?\s*source\s*:\s*[^\]\n]+\]?)/i, '')
-          .replace(/^[-—:\s]+/, '')
-          .trim();
-        if (textWithoutSource) {
-          currentSection.items.push(textWithoutSource);
-        }
+        currentSection.source = srcMatch[1].trim();
         continue;
       }
     }
@@ -246,16 +229,9 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
                 <span>✨ Tiny Spark</span>
               </div>
               <div className="text-xs text-amber-950 dark:text-amber-100 font-medium leading-relaxed space-y-1">
-                {/* [AI-ENHANCEMENT: SPARK-PARSER-FIX] */}
-                {sec.items.length > 0 ? (
-                  sec.items.map((it, itIdx) => (
-                    <p key={itIdx}>{renderInlineTokens(it)}</p>
-                  ))
-                ) : (
-                  <p className="italic opacity-80">
-                    A small spark of insight connecting your daily efforts to human behavior and science.
-                  </p>
-                )}
+                {sec.items.map((it, itIdx) => (
+                  <p key={itIdx}>{renderInlineTokens(it)}</p>
+                ))}
               </div>
               {sec.source && (
                 <div className="pt-1 flex items-center gap-1 text-[11px] text-amber-800 dark:text-amber-300 font-medium">
