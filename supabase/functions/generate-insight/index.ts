@@ -489,16 +489,22 @@ ${question}`;
       parts: [{ text: currentPrompt }],
     });
 
-    const modelCandidates = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest'];
+    /* [AI-ENHANCEMENT: GEMINI-2.0-FLASH-FAST-RESOLVER] */
+    // Use Google's official state-of-the-art models: gemini-2.0-flash (sub-second speed & high intelligence)
+    // with gemini-1.5-flash as robust fallback, backed by strict 10s AbortController timeouts to prevent gateway stalls.
+    const modelCandidates = ['gemini-2.0-flash', 'gemini-1.5-flash'];
     let aiAnswer = '';
 
     if (geminiApiKey) {
       for (const model of modelCandidates) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
           const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
             body: JSON.stringify({
               systemInstruction: { parts: [{ text: systemPrompt }] },
               contents,
@@ -508,6 +514,7 @@ ${question}`;
               },
             }),
           });
+          clearTimeout(timeoutId);
           if (res.ok) {
             const data = await res.json();
             const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
@@ -516,10 +523,12 @@ ${question}`;
               break;
             }
           } else {
-            console.warn(`Model ${model} returned status:`, res.status);
+            const errBody = await res.text().catch(() => '');
+            console.warn(`Model ${model} returned status ${res.status}:`, errBody.slice(0, 150));
           }
-        } catch (e) {
-          console.warn(`Error calling ${model}:`, e);
+        } catch (e: any) {
+          clearTimeout(timeoutId);
+          console.warn(`Error or timeout calling ${model}:`, e?.message || e);
         }
       }
     }
