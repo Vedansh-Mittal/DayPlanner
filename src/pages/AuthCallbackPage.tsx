@@ -79,7 +79,7 @@ export const AuthCallbackPage: React.FC = () => {
           if (!resolved) {
             if (cleanupSub) cleanupSub.unsubscribe();
             setError(
-              'No active login session found in this browser. If you use an installed app or different browser, please enter the 6-digit code from your email directly in the app.'
+              'No active login session found in this browser. If you use an installed app or different browser, please enter the verification code from your email directly in the app.'
             );
           }
         }, 3500);
@@ -114,7 +114,7 @@ export const AuthCallbackPage: React.FC = () => {
                 className="btn-primary w-full py-2.5"
                 onClick={() => navigate('/login', { replace: true })}
               >
-                Back to Login (Enter 6-Digit Code)
+                Back to Login (Enter Code)
               </button>
             </div>
           </div>

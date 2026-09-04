@@ -56,11 +56,29 @@ export const LoginPage: React.FC = () => {
     setOtpError(null);
 
     try {
-      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+      // 1. Try 'email' type (standard OTP / magic link)
+      let { data, error: verifyError } = await supabase.auth.verifyOtp({
         email: email.trim(),
         token: cleanToken,
         type: 'email',
       });
+
+      // 2. If 'email' failed, try 'signup' type (in case it is treated as a first-time signup token)
+      if (verifyError) {
+        try {
+          const signupAttempt = await supabase.auth.verifyOtp({
+            email: email.trim(),
+            token: cleanToken,
+            type: 'signup',
+          });
+          if (!signupAttempt.error && signupAttempt.data?.session) {
+            data = signupAttempt.data;
+            verifyError = null;
+          }
+        } catch (e) {
+          // ignore fallback error
+        }
+      }
 
       if (verifyError) {
         setOtpError(verifyError.message || 'Invalid or expired code. Please check your email.');
@@ -178,7 +196,7 @@ export const LoginPage: React.FC = () => {
 
               <div className="pt-1 text-center space-y-1">
                 <p className="text-xs text-text-muted dark:text-dark-text-muted">
-                  ✨ No password needed. We'll email you a secure link and a 6-digit code.
+                  ✨ No password needed. We'll email you a secure link and a login code.
                 </p>
               </div>
             </form>
@@ -194,25 +212,25 @@ export const LoginPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* 6-digit OTP Code Input */}
+              {/* OTP Code Input (supports 6 to 8 digits) */}
               <form onSubmit={handleVerifyOtp} className="pt-2 text-left space-y-3">
                 <div className="border-t border-border/60 dark:border-dark-border/60 pt-4">
                   <label htmlFor="otp-code-input" className="block text-xs font-semibold uppercase tracking-wider text-text-secondary dark:text-dark-text-secondary mb-1.5 text-center flex items-center justify-center gap-1.5">
                     <KeyRound size={14} className="text-lavender" />
-                    Enter the 6-digit code from email
+                    Enter the code from your email
                   </label>
                   <input
                     id="otp-code-input"
                     type="text"
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    maxLength={6}
+                    maxLength={10}
                     autoFocus
-                    placeholder="123456"
-                    className="input-field text-center font-mono text-2xl tracking-[0.25em] font-bold py-2.5"
+                    placeholder="Enter code"
+                    className="input-field text-center font-mono text-xl sm:text-2xl tracking-[0.16em] font-bold py-2.5"
                     value={otp}
                     onChange={(e) => {
-                      const clean = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                      const clean = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
                       setOtp(clean);
                       if (otpError) setOtpError(null);
                     }}
