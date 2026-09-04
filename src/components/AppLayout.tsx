@@ -46,13 +46,14 @@ export const AppLayout: React.FC = () => {
   const handleEnter = () => {
     sessionStorage.setItem('dayplanner_welcome_shown', 'true');
     setShowWelcome(false);
+    window.dispatchEvent(new Event('dayplanner_welcome_dismissed'));
   };
 
   React.useEffect(() => {
     if (showWelcome) {
       const timer = setTimeout(() => {
         handleEnter();
-      }, 4500);
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [showWelcome]);
@@ -87,7 +88,10 @@ export const AppLayout: React.FC = () => {
   };
 
   if (showWelcome) {
-    const userName = settings?.display_name || '';
+    const userName =
+      settings?.display_name ||
+      user?.user_metadata?.full_name ||
+      (user?.email ? user.email.split('@')[0] : '');
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-cream dark:bg-dark-bg splash-bg select-none transition-all duration-700">
         {/* Floating gradient decorative orbs */}
@@ -103,7 +107,7 @@ export const AppLayout: React.FC = () => {
           </div>
 
           <h2 className="text-2xl md:text-3xl font-extrabold text-text-primary dark:text-dark-text tracking-tight mb-2">
-            {userName ? `Welcome back, ${userName}` : 'A Moment of Peace'}
+            {userName ? `Welcome, ${userName}` : 'Welcome'}
           </h2>
           
           <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-lavender-light dark:bg-lavender-dark/20 text-lavender-dark dark:text-lavender mb-6">
@@ -118,7 +122,7 @@ export const AppLayout: React.FC = () => {
             onClick={handleEnter}
             className="w-full py-3.5 px-6 rounded-2xl bg-lavender-dark dark:bg-lavender text-white dark:text-dark-bg font-bold shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
-            <span>Enter My Space</span>
+            <span>Continue</span>
             <Sparkles size={18} />
           </button>
         </div>

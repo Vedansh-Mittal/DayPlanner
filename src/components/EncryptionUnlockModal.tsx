@@ -20,8 +20,18 @@ export const EncryptionUnlockModal: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(() => {
+    return !!sessionStorage.getItem('dayplanner_welcome_shown');
+  });
 
-  if (!showUnlockModal) return null;
+  React.useEffect(() => {
+    const handleDismiss = () => setWelcomeDismissed(true);
+    window.addEventListener('dayplanner_welcome_dismissed', handleDismiss);
+    return () => window.removeEventListener('dayplanner_welcome_dismissed', handleDismiss);
+  }, []);
+
+  // Only show the unlock modal if encryption requires unlocking AND the welcome screen has already been dismissed!
+  if (!showUnlockModal || !welcomeDismissed) return null;
 
   const handleClose = () => {
     setShowUnlockModal(false);

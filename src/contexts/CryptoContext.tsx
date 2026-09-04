@@ -59,20 +59,26 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const settingsRef = useRef<UserSettings | null>(null);
 
   // Save DEK on this device (localStorage) so user never has to unlock again on this phone/computer
-  const saveDekToDevice = async (key: CryptoKey) => {
+  const saveDekToDevice = async (key: CryptoKey, userId?: string) => {
     try {
       const raw = await crypto.subtle.exportKey('raw', key);
       const b64 = bufferToBase64(raw);
       localStorage.setItem(DEVICE_DEK_KEY, b64);
+      if (userId) {
+        localStorage.setItem(`${DEVICE_DEK_KEY}_${userId}`, b64);
+      }
       sessionStorage.setItem(DEVICE_DEK_KEY, b64);
     } catch (e) {
       console.warn('Failed to save DEK in device storage:', e);
     }
   };
 
-  const clearDeviceDek = () => {
+  const clearDeviceDek = (userId?: string) => {
     localStorage.removeItem(DEVICE_DEK_KEY);
     sessionStorage.removeItem(DEVICE_DEK_KEY);
+    if (userId) {
+      localStorage.removeItem(`${DEVICE_DEK_KEY}_${userId}`);
+    }
   };
 
   // Check user settings on login
@@ -80,7 +86,9 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!user) {
       setIsEncryptionConfigured(false);
       setDek(null);
-      clearDeviceDek();
+      // NOTE: DO NOT call clearDeviceDek() here!
+      // When page refreshes, user is briefly null while auth initializes asynchronously.
+      // Calling clearDeviceDek() here wiped the key on every refresh!
       setIsLoadingCrypto(false);
       return;
     }
@@ -104,8 +112,12 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (settings?.encryption_enabled && settings.wrapped_key_passphrase && settings.encryption_salt) {
         setIsEncryptionConfigured(true);
 
-        // Check if device already has the key stored (persistent across tab closes)
-        const cachedRaw = localStorage.getItem(DEVICE_DEK_KEY) || sessionStorage.getItem(DEVICE_DEK_KEY);
+        // Check if device already has the key stored (persistent across tab closes & refreshes)
+        const cachedRaw =
+          localStorage.getItem(`${DEVICE_DEK_KEY}_${user.id}`) ||
+          localStorage.getItem(DEVICE_DEK_KEY) ||
+          sessionStorage.getItem(DEVICE_DEK_KEY);
+
         if (cachedRaw) {
           try {
             const rawBytes = base64ToBuffer(cachedRaw);
@@ -117,11 +129,12 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               ['encrypt', 'decrypt']
             );
             setDek(importedDek);
+            setShowUnlockModal(false);
             setIsLoadingCrypto(false);
             return;
           } catch (err) {
             console.warn('Failed to restore DEK from storage:', err);
-            clearDeviceDek();
+            clearDeviceDek(user.id);
           }
         }
 
@@ -130,7 +143,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } else {
         setIsEncryptionConfigured(false);
         setDek(null);
-        clearDeviceDek();
+        clearDeviceDek(user?.id);
       }
     } catch (err) {
       console.error('Error in crypto settings check:', err);
@@ -159,7 +172,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       );
 
       setDek(unlockedDek);
-      await saveDekToDevice(unlockedDek);
+      await saveDekToDevice(unlockedDek, user?.id);
       setShowUnlockModal(false);
       return true;
     } catch (err) {
@@ -184,7 +197,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       );
 
       setDek(unlockedDek);
-      await saveDekToDevice(unlockedDek);
+      await saveDekToDevice(unlockedDek, user?.id);
       setShowUnlockModal(false);
       return true;
     } catch (err) {
@@ -218,7 +231,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Update state
     setDek(result.dek);
-    await saveDekToDevice(result.dek);
+    await saveDekToDevice(result.dek, user?.id);
     setIsEncryptionConfigured(true);
     setShowUnlockModal(false);
 
@@ -266,57 +279,57 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Lock session manually
   const lock = () => {
     setDek(null);
-    clearDeviceDek();
+    clearDeviceDek(user?.id);
     if (isEncryptionConfigured) {
       setShowUnlockModal(true);
     }
   };
 
-  // Transformers
-  const encryptDailyEntry = async <T extends Record<string, any>>(entry: T): Promise<T> => {
+  // Transformers (memoized so consumers react when dek changes)
+  const encryptDailyEntry = useCallback(async <T extends Record<string, any>>(entry: T): Promise<T> => {
     if (!isEncryptionConfigured || !dek) return entry;
     return encryptEntryData(entry, dek);
-  };
+  }, [isEncryptionConfigured, dek]);
 
-  const decryptDailyEntry = async <T extends Record<string, any>>(entry: T): Promise<T> => {
+  const decryptDailyEntry = useCallback(async <T extends Record<string, any>>(entry: T): Promise<T> => {
     return decryptEntryData(entry, dek);
-  };
+  }, [dek]);
 
-  const encryptPrioritiesList = async (items: any[]): Promise<any[]> => {
+  const encryptPrioritiesList = useCallback(async (items: any[]): Promise<any[]> => {
     if (!isEncryptionConfigured || !dek) return items;
     return encryptPriorities(items, dek);
-  };
+  }, [isEncryptionConfigured, dek]);
 
-  const decryptPrioritiesList = async (items: any[]): Promise<any[]> => {
+  const decryptPrioritiesList = useCallback(async (items: any[]): Promise<any[]> => {
     return decryptPriorities(items, dek);
-  };
+  }, [dek]);
 
-  const encryptActionStepsList = async (items: any[]): Promise<any[]> => {
+  const encryptActionStepsList = useCallback(async (items: any[]): Promise<any[]> => {
     if (!isEncryptionConfigured || !dek) return items;
     return encryptActionSteps(items, dek);
-  };
+  }, [isEncryptionConfigured, dek]);
 
-  const decryptActionStepsList = async (items: any[]): Promise<any[]> => {
+  const decryptActionStepsList = useCallback(async (items: any[]): Promise<any[]> => {
     return decryptActionSteps(items, dek);
-  };
+  }, [dek]);
 
-  const encryptMealsList = async (items: any[]): Promise<any[]> => {
+  const encryptMealsList = useCallback(async (items: any[]): Promise<any[]> => {
     if (!isEncryptionConfigured || !dek) return items;
     return encryptMeals(items, dek);
-  };
+  }, [isEncryptionConfigured, dek]);
 
-  const decryptMealsList = async (items: any[]): Promise<any[]> => {
+  const decryptMealsList = useCallback(async (items: any[]): Promise<any[]> => {
     return decryptMeals(items, dek);
-  };
+  }, [dek]);
 
-  const encryptMedicationsList = async (items: any[]): Promise<any[]> => {
+  const encryptMedicationsList = useCallback(async (items: any[]): Promise<any[]> => {
     if (!isEncryptionConfigured || !dek) return items;
     return encryptMedications(items, dek);
-  };
+  }, [isEncryptionConfigured, dek]);
 
-  const decryptMedicationsList = async (items: any[]): Promise<any[]> => {
+  const decryptMedicationsList = useCallback(async (items: any[]): Promise<any[]> => {
     return decryptMedications(items, dek);
-  };
+  }, [dek]);
 
   const isUnlocked = !isEncryptionConfigured || dek !== null;
 

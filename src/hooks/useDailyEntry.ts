@@ -175,6 +175,8 @@ export function useDailyEntry(dateStr: string) {
   const user = useAuthStore((s) => s.user);
   const {
     isUnlocked,
+    dek,
+    isEncryptionConfigured,
     encryptDailyEntry,
     decryptDailyEntry,
     encryptPrioritiesList,
@@ -224,6 +226,7 @@ export function useDailyEntry(dateStr: string) {
 
   /* Helper to sync current state to local offline cache immediately */
   const syncLocalCache = useCallback(() => {
+    if (isEncryptionConfigured && !isUnlocked) return;
     saveToLocalCache(
       dateStrRef.current,
       {
@@ -238,7 +241,7 @@ export function useDailyEntry(dateStr: string) {
       windDownRef.current,
       medicationsRef.current
     );
-  }, []);
+  }, [isEncryptionConfigured, isUnlocked]);
 
   /* ——— Load entry for date ——— */
   const load = useCallback(async () => {
@@ -255,8 +258,13 @@ export function useDailyEntry(dateStr: string) {
         const cache = JSON.parse(cacheStr);
         const cachedData = cache[dateStr];
         if (cachedData) {
-          setEntryId(cachedData.id || null);
-          setEntryFields(extractFields(cachedData));
+          // If cached data contains locked entry markers, ignore offline cache and wait for Supabase decrypt!
+          const hasLockedMarker = Object.values(cachedData).some(
+            (v) => typeof v === 'string' && v.includes('[Locked Entry')
+          );
+          if (!hasLockedMarker) {
+            setEntryId(cachedData.id || null);
+            setEntryFields(extractFields(cachedData));
           
           const cPriorities = (cachedData.priorities as Priority[]) || [];
           const normalizedCP = [0, 1, 2].map((i) => {
@@ -289,8 +297,9 @@ export function useDailyEntry(dateStr: string) {
           setMedications(cachedMeds);
           medicationsRef.current = cachedMeds;
 
-          setMeals(cachedData.meals || defaultMeals());
-          setWindDownItems(cachedData.wind_down_items || defaultWindDown());
+            setMeals(cachedData.meals || defaultMeals());
+            setWindDownItems(cachedData.wind_down_items || defaultWindDown());
+          }
         }
       }
     } catch (e) {
@@ -372,15 +381,17 @@ export function useDailyEntry(dateStr: string) {
           : defaultWindDown(),
       );
 
-      saveToLocalCache(
-        dateStr,
-        extractFields(decryptedData),
-        normalizedP,
-        normalizedA,
-        decryptedMeals,
-        decryptedData.wind_down_items || [],
-        loadedMeds
-      );
+      if (isUnlocked) {
+        saveToLocalCache(
+          dateStr,
+          extractFields(decryptedData),
+          normalizedP,
+          normalizedA,
+          decryptedMeals,
+          decryptedData.wind_down_items || [],
+          loadedMeds
+        );
+      }
     } else {
       // No entry in DB yet -> clean default fields with empty medications
       setEntryId(null);
@@ -397,7 +408,18 @@ export function useDailyEntry(dateStr: string) {
       setWindDownItems(defaultWindDown());
     }
     setLoading(false);
-  }, [user, dateStr]);
+  }, [
+    user,
+    dateStr,
+    dek,
+    isUnlocked,
+    isEncryptionConfigured,
+    decryptDailyEntry,
+    decryptPrioritiesList,
+    decryptActionStepsList,
+    decryptMealsList,
+    decryptMedicationsList,
+  ]);
 
   useEffect(() => {
     load();
@@ -457,6 +479,11 @@ export function useDailyEntry(dateStr: string) {
 
   const doSave = async () => {
     if (!user) return;
+    if (isEncryptionConfigured && !isUnlocked) {
+      setSaveStatus('idle');
+      savingRef.current = false;
+      return;
+    }
     if (!dirtyRef.current && !savingRef.current) { setSaveStatus('idle'); return; }
 
     dirtyRef.current = false;
@@ -972,6 +999,14 @@ export function saveToLocalCache(
   meds: any[]
 ) {
   try {
+    // Safety guard: Never write locked placeholders to offline cache
+    const isLockedEntry = Object.values(entry || {}).some(
+      (v) => typeof v === 'string' && v.includes('[Locked Entry')
+    );
+    if (isLockedEntry) {
+      return;
+    }
+
     const cacheStr = localStorage.getItem('daylight_offline_cache') || '{}';
     const cache = JSON.parse(cacheStr);
     cache[date] = {
