@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Sun, Calendar, BarChart3, Settings, LogOut, Sparkles, Shield } from 'lucide-react';
+import { Sun, Calendar, BarChart3, Settings, LogOut, Sparkles, Shield, Compass } from 'lucide-react';
 import { useAuthStore } from '../stores/auth-store';
 import { useUserSettings } from '../hooks/useUserSettings';
 import { Navigate } from 'react-router-dom';
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { to: '/app', label: 'Today', icon: Sun, end: true },
   { to: '/app/history', label: 'History', icon: Calendar, end: false },
   { to: '/app/insights', label: 'Insights', icon: Sparkles, end: false },
+  { to: '/app/personalisation', label: 'Persona', icon: Compass, end: false },
   { to: '/app/security', label: 'Security', icon: Shield, end: false },
   { to: '/app/settings', label: 'Settings', icon: Settings, end: false },
 ];
@@ -180,15 +181,15 @@ export const AppLayout: React.FC = () => {
             to={item.to}
             end={item.end}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs font-semibold tap-spring transition-colors ${
+              `flex flex-col items-center gap-0.5 px-1.5 py-1 rounded-lg text-[10px] sm:text-xs font-semibold tap-spring transition-colors ${
                 isActive
                   ? 'text-lavender-dark dark:text-lavender font-bold'
                   : 'text-text-muted dark:text-dark-text-muted'
               }`
             }
           >
-            <item.icon size={20} />
-            {item.label}
+            <item.icon size={19} />
+            <span className="truncate max-w-[52px] sm:max-w-none text-center leading-tight">{item.label}</span>
           </NavLink>
         ))}
       </nav>

@@ -9,27 +9,20 @@ import { getAllTimezones } from '../lib/utils';
 import {
   Settings as SettingsIcon, User, Globe, Clock, Droplets, Bell,
   Palette, LogOut, Trash2, Loader2, Check, Sun, Moon, Monitor,
-  Download, Upload, FileText, Sparkles, Compass, Target, Lightbulb, Smile, BookOpen, Briefcase,
+  Download, Upload, FileText, Sparkles, Compass, BookOpen,
   Shield, Smartphone, Share2, Lock, Eye, EyeOff, AlertCircle, X, Package, ShieldCheck, KeyRound
 } from 'lucide-react';
 import { useCrypto } from '../contexts/CryptoContext';
 import { encryptBackupPayload, decryptBackupPayload } from '../lib/crypto';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import { subscribeToPush, unsubscribeFromPush } from '../lib/push';
-import {
-  LIFE_STAGE_OPTIONS,
-  CAREER_FIELD_OPTIONS,
-  FOCUS_OPTIONS,
-  INTEREST_OPTIONS,
-  SUPPORT_STYLE_OPTIONS,
-} from '../types/database';
 
 const timezones = getAllTimezones();
 
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { settings, updateSettings, loading: settingsLoading } = useUserSettings();
-  const { personalisation, updatePersonalisation, loading: personaLoading } = usePersonalisation();
+  const { personalisation } = usePersonalisation();
   const signOut = useAuthStore((s) => s.signOut);
   const user = useAuthStore((s) => s.user);
   const { preference: themePref, setPreference: setThemePref } = useThemeStore();
@@ -48,17 +41,6 @@ export const SettingsPage: React.FC = () => {
   const [hasInitialized, setHasInitialized] = useState(false);
   const { isStandalone, isIOS, canInstallPrompt, install: installPwa } = usePwaInstall();
   const [isInstallingPwa, setIsInstallingPwa] = useState(false);
-
-  // Personalisation states (Multi-select)
-  const [lifeStages, setLifeStages] = useState<string[]>([]);
-  const [careerFields, setCareerFields] = useState<string[]>([]);
-  const [customField, setCustomField] = useState<string>('');
-  const [currentFocuses, setCurrentFocuses] = useState<string[]>([]);
-  const [customFocus, setCustomFocus] = useState<string>('');
-  const [interests, setInterests] = useState<string[]>([]);
-  const [supportStyles, setSupportStyles] = useState<('gentle' | 'cheerful' | 'direct' | 'playful')[]>(['gentle']);
-  const [personalisationEnabled, setPersonalisationEnabled] = useState<boolean>(true);
-  const [triviaEnabled, setTriviaEnabled] = useState<boolean>(true);
 
   // Encryption (E2EE)
   const {
@@ -474,39 +456,6 @@ export const SettingsPage: React.FC = () => {
     }
   }, [settings, hasInitialized]);
 
-  useEffect(() => {
-    if (personalisation) {
-      setLifeStages(personalisation.life_stages || []);
-      
-      const knownFields = CAREER_FIELD_OPTIONS as readonly string[];
-      const savedFields = personalisation.career_fields || [];
-      const standardFields = savedFields.filter((f) => knownFields.includes(f as any));
-      const customOnes = savedFields.filter((f) => !knownFields.includes(f as any) && f !== 'Other');
-      
-      if (customOnes.length > 0) {
-        if (!standardFields.includes('Other')) standardFields.push('Other');
-        setCustomField(customOnes.join(', '));
-      }
-      setCareerFields(standardFields);
-
-      const knownFocuses = FOCUS_OPTIONS as readonly string[];
-      const savedFocuses = personalisation.current_focuses || [];
-      const standardFocuses = savedFocuses.filter((f) => knownFocuses.includes(f as any));
-      const customFocs = savedFocuses.filter((f) => !knownFocuses.includes(f as any) && f !== 'Other');
-
-      if (customFocs.length > 0) {
-        if (!standardFocuses.includes('Other')) standardFocuses.push('Other');
-        setCustomFocus(customFocs.join(', '));
-      }
-      setCurrentFocuses(standardFocuses);
-
-      setInterests(personalisation.interests || []);
-      setSupportStyles(personalisation.support_styles?.length ? personalisation.support_styles : ['gentle']);
-      setPersonalisationEnabled(personalisation.personalisation_enabled !== false);
-      setTriviaEnabled(personalisation.trivia_enabled !== false);
-    }
-  }, [personalisation]);
-
   const filteredTz = tzSearch
     ? timezones.filter((tz) => tz.label.toLowerCase().includes(tzSearch.toLowerCase()))
     : timezones;
@@ -515,42 +464,15 @@ export const SettingsPage: React.FC = () => {
     setSaving(true);
     setSaved(false);
     try {
-      let mergedCareerFields = careerFields.filter((f) => f !== 'Other');
-      if (careerFields.includes('Other') && customField.trim()) {
-        const parts = customField.split(',').map((p) => p.trim()).filter(Boolean);
-        for (const p of parts) {
-          if (!mergedCareerFields.includes(p)) mergedCareerFields.push(p);
-        }
-      }
-
-      let mergedFocuses = currentFocuses.filter((f) => f !== 'Other');
-      if (currentFocuses.includes('Other') && customFocus.trim()) {
-        const parts = customFocus.split(',').map((p) => p.trim()).filter(Boolean);
-        for (const p of parts) {
-          if (!mergedFocuses.includes(p)) mergedFocuses.push(p);
-        }
-      }
-
-      await Promise.all([
-        updateSettings({
-          display_name: displayName || null,
-          timezone,
-          morning_reminder: morningReminder,
-          night_reminder: nightReminder,
-          water_goal: waterGoal,
-          email_reminders: emailReminders,
-          push_reminders_enabled: pushRemindersEnabled,
-        }),
-        updatePersonalisation({
-          life_stages: lifeStages,
-          career_fields: mergedCareerFields,
-          current_focuses: mergedFocuses,
-          interests,
-          support_styles: supportStyles.length ? supportStyles : ['gentle'],
-          personalisation_enabled: personalisationEnabled,
-          trivia_enabled: triviaEnabled,
-        }),
-      ]);
+      await updateSettings({
+        display_name: displayName || null,
+        timezone,
+        morning_reminder: morningReminder,
+        night_reminder: nightReminder,
+        water_goal: waterGoal,
+        email_reminders: emailReminders,
+        push_reminders_enabled: pushRemindersEnabled,
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -703,262 +625,28 @@ export const SettingsPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ✨ AI Reflection & Personalisation */}
-      <section className="card space-y-6 border-lavender/30 dark:border-lavender/20">
-        <div className="flex items-start justify-between">
+      {/* Personalisation & AI Coach Link */}
+      <section className="card p-5 border border-lavender/30 bg-gradient-to-r from-lavender/10 to-surface dark:to-dark-surface flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-lavender/15 text-lavender flex items-center justify-center font-bold">
+            <Compass className="w-5 h-5" />
+          </div>
           <div>
-            <h2 className="section-title text-lavender flex items-center gap-2">
-              <Sparkles size={18} className="text-lavender" />
-              AI Reflection & Personalisation
+            <h2 className="text-sm font-bold text-text-primary dark:text-dark-text">
+              Personalisation & AI Coach
             </h2>
-            <p className="text-xs text-text-secondary dark:text-dark-text-secondary mt-1">
-              Help Mewd understand your path and tailor encouragement to your real journey. (All fields are optional).
+            <p className="text-xs text-text-muted dark:text-dark-text-muted">
+              {personalisation?.personalisation_enabled ? 'AI companion tailored to your path ✨' : 'Customize tone, career stage & Tiny Sparks'}
             </p>
           </div>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <span className="text-xs font-semibold text-text-muted">Enabled</span>
-            <input
-              type="checkbox"
-              className="toggle"
-              checked={personalisationEnabled}
-              onChange={(e) => setPersonalisationEnabled(e.target.checked)}
-            />
-          </label>
         </div>
-
-        {personalisationEnabled && (
-          <div className="space-y-5 pt-1">
-            {/* Current Path(s) */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted flex items-center gap-1.5">
-                  <Compass size={13} className="text-lavender" />
-                  Current Path / Stage
-                </label>
-                <span className="text-[10px] text-text-muted">Multi-select enabled</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {LIFE_STAGE_OPTIONS.map((stage) => {
-                  const isSelected = lifeStages.includes(stage);
-                  return (
-                    <button
-                      key={stage}
-                      type="button"
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring flex items-center gap-1 ${
-                        isSelected
-                          ? 'bg-lavender text-white border-lavender shadow-xs font-bold'
-                          : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
-                      }`}
-                      onClick={() => {
-                        if (isSelected) {
-                          setLifeStages(lifeStages.filter((s) => s !== stage));
-                        } else {
-                          setLifeStages([...lifeStages, stage]);
-                        }
-                      }}
-                    >
-                      {isSelected && <Check size={12} />}
-                      <span>{stage}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Field(s) / Area(s) */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted flex items-center gap-1.5">
-                  <Briefcase size={13} className="text-lavender" />
-                  Field / Area of Focus
-                </label>
-                <span className="text-[10px] text-text-muted">Multi-select enabled</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {CAREER_FIELD_OPTIONS.map((field) => {
-                  const isSelected = careerFields.includes(field);
-                  return (
-                    <button
-                      key={field}
-                      type="button"
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring flex items-center gap-1 ${
-                        isSelected
-                          ? 'bg-lavender text-white border-lavender shadow-xs font-bold'
-                          : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
-                      }`}
-                      onClick={() => {
-                        if (isSelected) {
-                          setCareerFields(careerFields.filter((f) => f !== field));
-                        } else {
-                          setCareerFields([...careerFields, field]);
-                        }
-                      }}
-                    >
-                      {isSelected && <Check size={12} />}
-                      <span>{field}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {careerFields.includes('Other') && (
-                <input
-                  type="text"
-                  className="input-field text-xs py-2 mt-2 transition-all animate-fadeIn"
-                  placeholder="Specify your field or specialization (e.g. Counselling Psychology, AI Research, Med-Tech)..."
-                  value={customField}
-                  onChange={(e) => setCustomField(e.target.value)}
-                  autoFocus
-                />
-              )}
-            </div>
-
-            {/* Current Focus(es) */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted flex items-center gap-1.5">
-                  <Target size={13} className="text-lavender" />
-                  Primary Goals & Focus Right Now
-                </label>
-                <span className="text-[10px] text-text-muted">Multi-select enabled</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {FOCUS_OPTIONS.map((foc) => {
-                  const isSelected = currentFocuses.includes(foc);
-                  return (
-                    <button
-                      key={foc}
-                      type="button"
-                      className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all tap-spring flex items-center gap-1 ${
-                        isSelected
-                          ? 'bg-lavender text-white border-lavender shadow-xs font-bold'
-                          : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
-                      }`}
-                      onClick={() => {
-                        if (isSelected) {
-                          setCurrentFocuses(currentFocuses.filter((f) => f !== foc));
-                        } else {
-                          setCurrentFocuses([...currentFocuses, foc]);
-                        }
-                      }}
-                    >
-                      {isSelected && <Check size={12} />}
-                      <span>{foc}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {currentFocuses.includes('Other') && (
-                <input
-                  type="text"
-                  className="input-field text-xs py-2 mt-2 transition-all animate-fadeIn"
-                  placeholder="Specify your custom goals or focus areas (comma-separated)..."
-                  value={customFocus}
-                  onChange={(e) => setCustomFocus(e.target.value)}
-                  autoFocus
-                />
-              )}
-            </div>
-
-            {/* Preferred Support Style(s) */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-text-muted dark:text-dark-text-muted flex items-center gap-1.5">
-                  <Smile size={13} className="text-lavender" />
-                  Companion Tone & Style (Select any that fit)
-                </label>
-                <span className="text-[10px] text-text-muted">Multi-select</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {SUPPORT_STYLE_OPTIONS.map((sty) => {
-                  const isSelected = supportStyles.includes(sty.id as any);
-                  return (
-                    <button
-                      key={sty.id}
-                      type="button"
-                      className={`text-left p-3 rounded-2xl border transition-all tap-spring ${
-                        isSelected
-                          ? 'bg-lavender/10 dark:bg-lavender/20 border-lavender shadow-xs ring-2 ring-lavender/40'
-                          : 'bg-surface dark:bg-dark-surface border-border/40 dark:border-dark-border hover:border-lavender/40'
-                      }`}
-                      onClick={() => {
-                        if (isSelected) {
-                          if (supportStyles.length > 1) {
-                            setSupportStyles(supportStyles.filter((s) => s !== sty.id));
-                          }
-                        } else {
-                          setSupportStyles([...supportStyles, sty.id as any]);
-                        }
-                      }}
-                    >
-                      <div className="text-xs font-bold text-text-primary dark:text-dark-text flex items-center justify-between">
-                        <span>{sty.label}</span>
-                        {isSelected && <Check size={14} className="text-lavender" />}
-                      </div>
-                      <div className="text-[11px] text-text-muted dark:text-dark-text-muted mt-0.5">
-                        {sty.desc}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Tiny Sparks & Interests */}
-            <div className="pt-3 border-t border-border/40 dark:border-dark-border/40 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-xs font-bold text-text-primary dark:text-dark-text flex items-center gap-1.5">
-                    <Lightbulb size={13} className="text-amber-500" />
-                    Include "Tiny Sparks" (Sourced Science & Trivia)
-                  </label>
-                  <p className="text-[11px] text-text-muted dark:text-dark-text-muted">
-                    Adds a short, fascinating sourced fact or psychological principle at the end of reflections.
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  className="toggle"
-                  checked={triviaEnabled}
-                  onChange={(e) => setTriviaEnabled(e.target.checked)}
-                />
-              </div>
-
-              {triviaEnabled && (
-                <div>
-                  <label className="block text-xs font-semibold text-text-muted mb-2">
-                    Pick your favorite spark topics:
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {INTEREST_OPTIONS.map((item) => {
-                      const isSelected = interests.includes(item.id);
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className={`text-xs font-medium px-3 py-1.5 rounded-xl border transition-all tap-spring flex items-center gap-1.5 ${
-                            isSelected
-                              ? 'bg-lavender text-white border-lavender shadow-xs font-bold'
-                              : 'bg-surface dark:bg-dark-surface text-text-secondary dark:text-dark-text-secondary border-border/40 dark:border-dark-border hover:border-lavender/40'
-                          }`}
-                          onClick={() => {
-                            if (isSelected) {
-                              setInterests(interests.filter((id) => id !== item.id));
-                            } else {
-                              setInterests([...interests, item.id]);
-                            }
-                          }}
-                        >
-                          <span>{item.emoji}</span>
-                          <span>{item.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => navigate('/app/personalisation')}
+          className="btn-secondary py-2 px-3.5 text-xs font-semibold"
+        >
+          Customize →
+        </button>
       </section>
 
       {/* Reminders */}

@@ -18,6 +18,7 @@ const HistoryPage = lazy(() => import('./pages/HistoryPage').then(m => ({ defaul
 const InsightsPage = lazy(() => import('./pages/InsightsPage').then(m => ({ default: m.InsightsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const SecurityPage = lazy(() => import('./pages/SecurityPage').then(m => ({ default: m.SecurityPage })));
+const PersonalisationPage = lazy(() => import('./pages/PersonalisationPage').then(m => ({ default: m.PersonalisationPage })));
 
 const PageLoadingFallback: React.FC = () => (
   <div className="min-h-[50vh] flex items-center justify-center p-8">
@@ -60,6 +61,7 @@ const App: React.FC = () => {
               <Route path="insights" element={<InsightsPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="security" element={<SecurityPage />} />
+              <Route path="personalisation" element={<PersonalisationPage />} />
             </Route>
 
             {/* Default redirect */}

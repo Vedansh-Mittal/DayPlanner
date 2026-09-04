@@ -72,7 +72,7 @@ export const SecurityPage: React.FC = () => {
         <p className="text-sm text-text-secondary dark:text-dark-text-secondary leading-relaxed">
           {isEncryptionConfigured ? (
             <>
-              Your daily brain dumps, priorities, action steps, meals, medications, and night thoughts are scrambled directly in your browser before saving to Supabase.
+              Your daily brain dumps, priorities, action steps, meals, medications, and night thoughts are scrambled directly in your browser before saving them to the database.
               <br /><br />
               Even if someone has physical access to the database or cloud servers, they see only indecipherable random letters. <strong>Only your password can decrypt them.</strong>
             </>

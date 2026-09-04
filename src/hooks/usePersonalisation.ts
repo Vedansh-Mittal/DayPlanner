@@ -10,7 +10,7 @@ export const DEFAULT_PERSONALISATION: Omit<UserPersonalisation, 'user_id' | 'cre
   career_fields: [],
   current_focus: null,
   current_focuses: [],
-  interests: ['technology', 'psychology', 'random_facts'],
+  interests: [],
   support_style: 'gentle',
   support_styles: ['gentle'],
   personalisation_enabled: true,

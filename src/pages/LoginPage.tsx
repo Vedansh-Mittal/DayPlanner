@@ -120,9 +120,6 @@ export const LoginPage: React.FC = () => {
                 <p className="text-xs text-text-muted dark:text-dark-text-muted">
                   ✨ No password needed to sign in. We'll email you a secure link.
                 </p>
-                <p className="text-[11px] text-text-muted/80 dark:text-dark-text-muted/80">
-                  Your encryption password is only used to decrypt your journal after logging in.
-                </p>
               </div>
             </form>
           ) : (
