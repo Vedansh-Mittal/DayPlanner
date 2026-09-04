@@ -329,17 +329,33 @@ export const HistoryPage: React.FC = () => {
                         {r.morning_mood && (
                           <span
                             className="text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1 bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
-                            style={MOOD_COLOR_MAP[r.morning_mood as MoodOption] ? { backgroundColor: `${MOOD_COLOR_MAP[r.morning_mood as MoodOption]}40` } : undefined}
+                            style={
+                              MOOD_COLOR_MAP[r.morning_mood.split(',')[0].trim().toLowerCase() as MoodOption]
+                                ? { backgroundColor: `${MOOD_COLOR_MAP[r.morning_mood.split(',')[0].trim().toLowerCase() as MoodOption]}40` }
+                                : undefined
+                            }
                           >
-                            ☀️ {r.morning_mood}
+                            ☀️ {r.morning_mood.split(',').map((m: string) => {
+                              const trimmed = m.trim().toLowerCase() as MoodOption;
+                              const opt = MOOD_OPTIONS.find((o) => o.value === trimmed);
+                              return opt ? `${opt.emoji} ${opt.label}` : m.trim();
+                            }).join(' · ')}
                           </span>
                         )}
                         {r.night_mood ? (
                           <span
                             className="text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200"
-                            style={MOOD_COLOR_MAP[r.night_mood as MoodOption] ? { backgroundColor: `${MOOD_COLOR_MAP[r.night_mood as MoodOption]}40` } : undefined}
+                            style={
+                              MOOD_COLOR_MAP[r.night_mood.split(',')[0].trim().toLowerCase() as MoodOption]
+                                ? { backgroundColor: `${MOOD_COLOR_MAP[r.night_mood.split(',')[0].trim().toLowerCase() as MoodOption]}40` }
+                                : undefined
+                            }
                           >
-                            🌙 {r.night_mood}
+                            🌙 {r.night_mood.split(',').map((m: string) => {
+                              const trimmed = m.trim().toLowerCase() as MoodOption;
+                              const opt = MOOD_OPTIONS.find((o) => o.value === trimmed);
+                              return opt ? `${opt.emoji} ${opt.label}` : m.trim();
+                            }).join(' · ')}
                           </span>
                         ) : (
                           <Moon size={15} className="text-text-muted opacity-60 ml-0.5" />
@@ -392,8 +408,10 @@ export const HistoryPage: React.FC = () => {
             const isFutureDate = dateStr > todayStr;
             const data = calendarData[dateStr];
             const todayClass = isToday(day) ? 'today' : '';
-            const activeMoodKey = data?.morning_mood || data?.night_mood;
-            const moodColor = activeMoodKey ? MOOD_COLOR_MAP[activeMoodKey as MoodOption] : undefined;
+            /* [TAG: MULTI_MOOD_SELECTION_V1] */
+            const activeMoodRaw = data?.morning_mood || data?.night_mood;
+            const activeMoodKey = activeMoodRaw ? (activeMoodRaw.split(',')[0].trim().toLowerCase() as MoodOption) : null;
+            const moodColor = activeMoodKey ? MOOD_COLOR_MAP[activeMoodKey] : undefined;
 
             const isMorningDone = data
               ? data.morning_completed || isMorningComplete(data, data.priorities || [], data.action_steps || [])

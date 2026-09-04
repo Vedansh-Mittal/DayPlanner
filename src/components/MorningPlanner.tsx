@@ -62,10 +62,11 @@ export const MorningPlanner: React.FC<MorningPlannerProps> = ({
             </span>
           )}
         </h3>
+        {/* [TAG: MULTI_MOOD_SELECTION_V1] */}
         <MoodSelector
           selectedMood={entry?.morning_mood || null}
           intensity={entry?.morning_mood_intensity || null}
-          onMoodChange={(mood) => updateField('morning_mood', mood)}
+          onMoodChange={(mood) => updateField('morning_mood', mood ? mood : null)}
           onIntensityChange={(i) => updateField('morning_mood_intensity', i)}
           label="How am I feeling today?"
         />

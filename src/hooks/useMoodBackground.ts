@@ -49,14 +49,29 @@ const DEFAULT_TINT = {
  * Applies a subtle, low-chroma ambient mood tint CSS variable to the page background (§4).
  * Transitions smoothly over 3.5 seconds using CSS variables.
  */
+/* [TAG: MULTI_MOOD_SELECTION_V1] */
 export function useMoodBackground(mood?: string | null) {
   useEffect(() => {
     const root = document.documentElement;
-    const tints = (mood && mood in MOOD_TINT_MAP)
-      ? MOOD_TINT_MAP[mood as MoodOption]
-      : DEFAULT_TINT;
+    const moods = mood
+      ? mood
+          .split(',')
+          .map((s) => s.trim().toLowerCase())
+          .filter((s) => s in MOOD_TINT_MAP)
+      : [];
 
-    root.style.setProperty('--mood-tint', tints.primary);
-    root.style.setProperty('--mood-tint-secondary', tints.secondary);
+    const primaryMood = moods[0] as MoodOption | undefined;
+    const secondaryMood = moods[1] as MoodOption | undefined;
+
+    const primaryTint = primaryMood
+      ? MOOD_TINT_MAP[primaryMood].primary
+      : DEFAULT_TINT.primary;
+
+    const secondaryTint = secondaryMood
+      ? MOOD_TINT_MAP[secondaryMood].secondary
+      : (primaryMood ? MOOD_TINT_MAP[primaryMood].secondary : DEFAULT_TINT.secondary);
+
+    root.style.setProperty('--mood-tint', primaryTint);
+    root.style.setProperty('--mood-tint-secondary', secondaryTint);
   }, [mood]);
 }

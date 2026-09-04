@@ -137,10 +137,11 @@ export const NightPlanner: React.FC<NightPlannerProps> = ({
             </span>
           )}
         </h3>
+        {/* [TAG: MULTI_MOOD_SELECTION_V1] */}
         <MoodSelector
           selectedMood={entry?.night_mood || null}
           intensity={entry?.night_mood_intensity || null}
-          onMoodChange={(mood) => updateField('night_mood', mood)}
+          onMoodChange={(mood) => updateField('night_mood', mood ? mood : null)}
           onIntensityChange={(i) => updateField('night_mood_intensity', i)}
           label="How am I feeling tonight?"
         />
