@@ -7,6 +7,7 @@ export const LoginPage: React.FC = () => {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isReadOnly, setIsReadOnly] = useState(true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,10 +51,10 @@ export const LoginPage: React.FC = () => {
         {/* Form card */}
         <div className="card fade-in" style={{ animationDelay: '0.1s' }}>
           {!sent ? (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="email" className="block text-sm font-semibold text-text-secondary dark:text-dark-text-secondary">
+                  <label htmlFor="magic-email-destination" className="block text-sm font-semibold text-text-secondary dark:text-dark-text-secondary">
                     Email address
                   </label>
                   <span className="text-[11px] font-semibold text-lavender-dark dark:text-lavender bg-lavender/10 dark:bg-lavender/20 px-2 py-0.5 rounded-full">
@@ -63,16 +64,26 @@ export const LoginPage: React.FC = () => {
                 <div className="relative">
                   <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
                   <input
-                    id="email"
-                    name="email"
-                    type="email"
+                    id="magic-email-destination"
+                    name="magic_link_email"
+                    type="text"
+                    inputMode="email"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    data-1p-ignore="true"
+                    data-lpignore="true"
+                    data-form-type="other"
+                    readOnly={isReadOnly}
+                    onFocus={() => setIsReadOnly(false)}
+                    onClick={() => setIsReadOnly(false)}
+                    onTouchStart={() => setIsReadOnly(false)}
                     className="input-field pl-10"
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    autoComplete="email"
-                    autoFocus
                   />
                 </div>
               </div>
