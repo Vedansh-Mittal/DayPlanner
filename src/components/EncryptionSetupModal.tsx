@@ -17,9 +17,9 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
   const user = useAuthStore((s) => s.user);
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const [passphrase, setPassphrase] = useState('');
-  const [confirmPassphrase, setConfirmPassphrase] = useState('');
-  const [showPassphrase, setShowPassphrase] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // Recovery Key State
   const [recoveryKey, setRecoveryKey] = useState('');
@@ -37,19 +37,19 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
   // Step 2 -> 3: Generate and download
   const handleGenerateKeys = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passphrase.length < 8) {
-      setError('Passphrase must be at least 8 characters long.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
-    if (passphrase !== confirmPassphrase) {
-      setError('Passphrases do not match.');
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
 
     setLoading(true);
     setError(null);
     try {
-      const result = await enableEncryption(passphrase);
+      const result = await enableEncryption(password);
       setRecoveryKey(result.recoveryKey);
       setStep(3);
     } catch (err: any) {
@@ -84,8 +84,6 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
     setDownloaded(true);
   };
 
-  // Segments for wallet-style verification
-  // Recovery key format is "XXXX-XXXX-XXXX-XXXX" -> 4 parts
   const segments = recoveryKey.split('-');
   const expectedSeg1 = segments[0] || '';
   const expectedSeg3 = segments[2] || '';
@@ -104,17 +102,17 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
     setTimeout(() => {
       onSuccess();
       onClose();
-    }, 2200);
+    }, 2000);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg bg-card-bg dark:bg-dark-card border border-border-default dark:border-dark-border rounded-2xl p-6 shadow-2xl">
+      <div className="relative w-full max-w-lg bg-card-bg dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl">
         {/* Close Button */}
         {step !== 4 && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-hover dark:hover:bg-dark-surface"
+            className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface dark:hover:bg-dark-surface"
           >
             <X className="w-4 h-4" />
           </button>
@@ -130,7 +128,7 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
                   ? 'bg-amber-500'
                   : s < step
                   ? 'bg-emerald-500'
-                  : 'bg-border-default dark:bg-dark-border'
+                  : 'bg-border dark:bg-dark-border'
               }`}
             />
           ))}
@@ -152,23 +150,23 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
               </div>
               <div>
                 <h3 className="text-base font-bold text-text-primary dark:text-dark-text">
-                  Enable Private Mode (Zero-Knowledge)
+                  Set Up Journal Encryption
                 </h3>
                 <p className="text-xs text-text-muted dark:text-dark-muted">
-                  Mathematical privacy for your personal reflections
+                  Zero-knowledge encryption for your private reflections
                 </p>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default dark:border-dark-border text-xs space-y-2.5 text-text-muted dark:text-dark-muted">
+            <div className="p-4 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border/60 dark:border-dark-border/60 text-xs space-y-2.5 text-text-muted dark:text-dark-muted">
               <p>
-                <strong className="text-text-primary dark:text-dark-text">What gets encrypted (AES-GCM-256):</strong> Your brain dumps, gratitude logs, daily notes, priorities, and reflections. They are scrambled in your browser before ever touching Supabase. Even database administrators cannot read them.
+                <strong className="text-text-primary dark:text-dark-text">What gets encrypted:</strong> Your daily thoughts, brain dumps, priorities, action steps, meals, medications, and night notes. They are encrypted directly in your browser before ever reaching the cloud database.
               </p>
               <p>
-                <strong className="text-text-primary dark:text-dark-text">What stays visible:</strong> Mood tags and dates remain plain so your calendar and mood streak charts stay fast. No written reflections are ever included in either.
+                <strong className="text-text-primary dark:text-dark-text">Remembered on this device:</strong> Once set up, this device stays unlocked so you never have to type your password every day.
               </p>
               <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-medium">
-                ⚠️ <strong>The Zero-Knowledge Rule:</strong> If you lose both your passphrase and your recovery file, nobody on earth (including Daylight) can recover your entries.
+                ⚠️ <strong>Important:</strong> Because this is zero-knowledge encryption, Daylight servers never store your password. Keep your password and recovery file safe.
               </div>
             </div>
 
@@ -177,7 +175,7 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
                 setError(null);
                 setStep(2);
               }}
-              className="w-full py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm transition-all flex items-center justify-center space-x-2"
+              className="w-full py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm transition-all flex items-center justify-center space-x-2 shadow-sm"
             >
               <span>I Understand, Continue</span>
               <ArrowRight className="w-4 h-4" />
@@ -185,7 +183,7 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
           </div>
         )}
 
-        {/* Step 2: Choose Passphrase */}
+        {/* Step 2: Choose Password */}
         {step === 2 && (
           <form onSubmit={handleGenerateKeys} className="space-y-4">
             <div className="flex items-center space-x-3">
@@ -194,10 +192,10 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
               </div>
               <div>
                 <h3 className="text-base font-bold text-text-primary dark:text-dark-text">
-                  Set Your Journal Passphrase
+                  Create Your Encryption Password
                 </h3>
                 <p className="text-xs text-text-muted dark:text-dark-muted">
-                  Separate from your magic-link login. Never sent to the server.
+                  Used exclusively to decrypt your thoughts on your devices
                 </p>
               </div>
             </div>
@@ -205,37 +203,37 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-text-primary dark:text-dark-text mb-1">
-                  Passphrase (minimum 8 characters)
+                  Password (minimum 8 characters)
                 </label>
                 <div className="relative">
                   <input
-                    type={showPassphrase ? 'text' : 'password'}
-                    value={passphrase}
-                    onChange={(e) => setPassphrase(e.target.value)}
-                    placeholder="Enter a memorable, strong passphrase"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your encryption password"
                     autoFocus
-                    className="w-full px-4 py-2.5 pr-10 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                    className="w-full px-4 py-2.5 pr-10 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPassphrase(!showPassphrase)}
+                    onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-2.5 text-text-muted hover:text-text-primary"
                   >
-                    {showPassphrase ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-text-primary dark:text-dark-text mb-1">
-                  Confirm Passphrase
+                  Confirm Password
                 </label>
                 <input
-                  type={showPassphrase ? 'text' : 'password'}
-                  value={confirmPassphrase}
-                  onChange={(e) => setConfirmPassphrase(e.target.value)}
-                  placeholder="Re-enter passphrase"
-                  className="w-full px-4 py-2.5 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  className="w-full px-4 py-2.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                 />
               </div>
             </div>
@@ -244,19 +242,19 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="py-2.5 px-4 rounded-xl border border-border-default dark:border-dark-border text-sm font-medium text-text-muted hover:text-text-primary"
+                className="py-2.5 px-4 rounded-xl border border-border dark:border-dark-border text-sm font-medium text-text-muted hover:text-text-primary"
               >
                 Back
               </button>
               <button
                 type="submit"
-                disabled={loading || !passphrase || !confirmPassphrase}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                disabled={loading || !password || !confirmPassword}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm transition-all flex items-center justify-center space-x-2 disabled:opacity-50 shadow-sm"
               >
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Deriving Keys (600,000 rounds)...</span>
+                    <span>Securing Key...</span>
                   </>
                 ) : (
                   <>
@@ -269,7 +267,7 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
           </form>
         )}
 
-        {/* Step 3: Download Recovery File & Wallet-Style Confirmation */}
+        {/* Step 3: Download Recovery File & Confirmation */}
         {step === 3 && (
           <form onSubmit={handleVerifyAndFinish} className="space-y-4">
             <div className="flex items-center space-x-3">
@@ -281,13 +279,13 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
                   Save Your Recovery Key
                 </h3>
                 <p className="text-xs text-text-muted dark:text-dark-muted">
-                  Keep this file safe in case you forget your passphrase
+                  Use this file if you ever forget your password
                 </p>
               </div>
             </div>
 
             {/* Display Recovery Key */}
-            <div className="p-3.5 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default dark:border-dark-border text-center">
+            <div className="p-3.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-center">
               <p className="text-[10px] uppercase font-bold text-text-muted tracking-wider mb-1">
                 Your Unique Recovery Key
               </p>
@@ -302,18 +300,18 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
               onClick={handleDownloadRecoveryFile}
               className={`w-full py-2.5 px-4 rounded-xl font-medium text-sm transition-all flex items-center justify-center space-x-2 border ${
                 downloaded
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
-                  : 'bg-surface-hover dark:bg-dark-surface border-border-default hover:border-amber-500 text-text-primary dark:text-dark-text'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold'
+                  : 'bg-surface-muted dark:bg-dark-surface-muted border-border hover:border-amber-500 text-text-primary dark:text-dark-text'
               }`}
             >
               <Download className="w-4 h-4" />
-              <span>{downloaded ? '✓ Recovery File Downloaded' : 'Download daylight-recovery-key.json'}</span>
+              <span>{downloaded ? '✓ Recovery File Downloaded' : 'Download Recovery Backup File (.json)'}</span>
             </button>
 
-            {/* Wallet-Style Verification Challenge */}
-            <div className="p-3 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default dark:border-dark-border space-y-2">
+            {/* Verification Challenge */}
+            <div className="p-3 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border space-y-2">
               <p className="text-xs font-semibold text-text-primary dark:text-dark-text">
-                Verify you have saved it: Enter segments #1 and #3:
+                Confirm your backup: Enter segments #1 and #3:
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -324,7 +322,7 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
                     value={challengeSeg1}
                     onChange={(e) => setChallengeSeg1(e.target.value.toUpperCase())}
                     placeholder="e.g. XKPQ"
-                    className="w-full px-3 py-1.5 rounded-lg bg-card-bg dark:bg-dark-card border border-border-default font-mono text-xs text-center uppercase text-text-primary dark:text-dark-text focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    className="w-full px-3 py-1.5 rounded-lg bg-card-bg dark:bg-dark-card border border-border font-mono text-xs text-center uppercase text-text-primary dark:text-dark-text focus:outline-none focus:ring-1 focus:ring-amber-500"
                   />
                 </div>
                 <div>
@@ -335,7 +333,7 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
                     value={challengeSeg3}
                     onChange={(e) => setChallengeSeg3(e.target.value.toUpperCase())}
                     placeholder="e.g. 4B2M"
-                    className="w-full px-3 py-1.5 rounded-lg bg-card-bg dark:bg-dark-card border border-border-default font-mono text-xs text-center uppercase text-text-primary dark:text-dark-text focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    className="w-full px-3 py-1.5 rounded-lg bg-card-bg dark:bg-dark-card border border-border font-mono text-xs text-center uppercase text-text-primary dark:text-dark-text focus:outline-none focus:ring-1 focus:ring-amber-500"
                   />
                 </div>
               </div>
@@ -344,9 +342,9 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
             <button
               type="submit"
               disabled={!downloaded || challengeSeg1.length !== 4 || challengeSeg3.length !== 4}
-              className="w-full py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+              className="w-full py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm transition-all flex items-center justify-center space-x-2 disabled:opacity-50 shadow-sm"
             >
-              <span>Verify & Activate Private Mode</span>
+              <span>Verify & Activate Encryption</span>
               <CheckCircle2 className="w-4 h-4" />
             </button>
           </form>
@@ -359,10 +357,10 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
               <Shield className="w-8 h-8" />
             </div>
             <h3 className="text-lg font-bold text-text-primary dark:text-dark-text">
-              Private Mode Active!
+              Encryption Activated!
             </h3>
             <p className="text-xs text-text-muted dark:text-dark-muted max-w-xs mx-auto">
-              Your journal is now protected with client-side zero-knowledge encryption. Reflections are encrypted automatically as you save.
+              Your journal is now protected with client-side zero-knowledge encryption. Your entries will be encrypted as you write them.
             </p>
           </div>
         )}

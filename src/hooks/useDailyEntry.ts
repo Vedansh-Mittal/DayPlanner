@@ -174,6 +174,7 @@ export function deleteMedicationPreset(name: string) {
 export function useDailyEntry(dateStr: string) {
   const user = useAuthStore((s) => s.user);
   const {
+    isUnlocked,
     encryptDailyEntry,
     decryptDailyEntry,
     encryptPrioritiesList,
@@ -429,7 +430,7 @@ export function useDailyEntry(dateStr: string) {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [load, syncLocalCache]);
+  }, [load, syncLocalCache, isUnlocked]);
 
   /* ——— Schedule / Flush save ——— */
 

@@ -21,7 +21,7 @@ import {
 } from '../lib/crypto';
 import type { UserSettings } from '../types/database';
 
-const SESSION_DEK_KEY = 'daylight_dek_session';
+const DEVICE_DEK_KEY = 'daylight_dek_device';
 
 interface CryptoContextType {
   isEncryptionConfigured: boolean;
@@ -30,10 +30,10 @@ interface CryptoContextType {
   isLoadingCrypto: boolean;
   showUnlockModal: boolean;
   setShowUnlockModal: (show: boolean) => void;
-  unlockWithPassphrase: (passphrase: string) => Promise<boolean>;
+  unlockWithPassphrase: (password: string) => Promise<boolean>;
   unlockWithRecoveryKey: (recoveryKey: string) => Promise<boolean>;
-  enableEncryption: (passphrase: string) => Promise<{ recoveryKey: string }>;
-  changePassphrase: (newPassphrase: string) => Promise<boolean>;
+  enableEncryption: (password: string) => Promise<{ recoveryKey: string }>;
+  changePassphrase: (newPassword: string) => Promise<boolean>;
   lock: () => void;
   // Transformers
   encryptDailyEntry: <T extends Record<string, any>>(entry: T) => Promise<T>;
@@ -58,18 +58,21 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const settingsRef = useRef<UserSettings | null>(null);
 
-  // Cache DEK in tab sessionStorage so refresh doesn't prompt
-  const cacheDekInSession = async (key: CryptoKey) => {
+  // Save DEK on this device (localStorage) so user never has to unlock again on this phone/computer
+  const saveDekToDevice = async (key: CryptoKey) => {
     try {
       const raw = await crypto.subtle.exportKey('raw', key);
-      sessionStorage.setItem(SESSION_DEK_KEY, bufferToBase64(raw));
+      const b64 = bufferToBase64(raw);
+      localStorage.setItem(DEVICE_DEK_KEY, b64);
+      sessionStorage.setItem(DEVICE_DEK_KEY, b64);
     } catch (e) {
-      console.warn('Failed to cache DEK in sessionStorage:', e);
+      console.warn('Failed to save DEK in device storage:', e);
     }
   };
 
-  const clearSessionDek = () => {
-    sessionStorage.removeItem(SESSION_DEK_KEY);
+  const clearDeviceDek = () => {
+    localStorage.removeItem(DEVICE_DEK_KEY);
+    sessionStorage.removeItem(DEVICE_DEK_KEY);
   };
 
   // Check user settings on login
@@ -77,7 +80,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!user) {
       setIsEncryptionConfigured(false);
       setDek(null);
-      clearSessionDek();
+      clearDeviceDek();
       setIsLoadingCrypto(false);
       return;
     }
@@ -101,8 +104,8 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (settings?.encryption_enabled && settings.wrapped_key_passphrase && settings.encryption_salt) {
         setIsEncryptionConfigured(true);
 
-        // Check if we already have DEK in current tab's sessionStorage
-        const cachedRaw = sessionStorage.getItem(SESSION_DEK_KEY);
+        // Check if device already has the key stored (persistent across tab closes)
+        const cachedRaw = localStorage.getItem(DEVICE_DEK_KEY) || sessionStorage.getItem(DEVICE_DEK_KEY);
         if (cachedRaw) {
           try {
             const rawBytes = base64ToBuffer(cachedRaw);
@@ -117,17 +120,17 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setIsLoadingCrypto(false);
             return;
           } catch (err) {
-            console.warn('Failed to restore DEK from sessionStorage:', err);
-            clearSessionDek();
+            console.warn('Failed to restore DEK from storage:', err);
+            clearDeviceDek();
           }
         }
 
-        // Encryption is enabled on account but not unlocked in this tab
+        // Encryption is enabled on account but this device is not yet unlocked
         setShowUnlockModal(true);
       } else {
         setIsEncryptionConfigured(false);
         setDek(null);
-        clearSessionDek();
+        clearDeviceDek();
       }
     } catch (err) {
       console.error('Error in crypto settings check:', err);
@@ -156,11 +159,11 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       );
 
       setDek(unlockedDek);
-      await cacheDekInSession(unlockedDek);
+      await saveDekToDevice(unlockedDek);
       setShowUnlockModal(false);
       return true;
     } catch (err) {
-      console.error('Unlock with passphrase failed:', err);
+      console.error('Unlock with password failed:', err);
       return false;
     }
   };
@@ -181,7 +184,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       );
 
       setDek(unlockedDek);
-      await cacheDekInSession(unlockedDek);
+      await saveDekToDevice(unlockedDek);
       setShowUnlockModal(false);
       return true;
     } catch (err) {
@@ -191,10 +194,10 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Initial Setup Wizard: Enable Private Mode
-  const enableEncryption = async (passphrase: string): Promise<{ recoveryKey: string }> => {
+  const enableEncryption = async (password: string): Promise<{ recoveryKey: string }> => {
     if (!user) throw new Error('User not logged in');
 
-    const result = await setupEncryption(passphrase);
+    const result = await setupEncryption(password);
 
     // Save to user_settings
     const { error } = await supabase
@@ -215,7 +218,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Update state
     setDek(result.dek);
-    await cacheDekInSession(result.dek);
+    await saveDekToDevice(result.dek);
     setIsEncryptionConfigured(true);
     setShowUnlockModal(false);
 
@@ -232,14 +235,14 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return { recoveryKey: result.recoveryKey };
   };
 
-  // Change Passphrase (zero re-encryption of data rows!)
-  const changePassphrase = async (newPassphrase: string): Promise<boolean> => {
-    if (!user || !dek) throw new Error('Journal must be unlocked to change passphrase');
+  // Change Password (zero re-encryption of data rows!)
+  const changePassphrase = async (newPassword: string): Promise<boolean> => {
+    if (!user || !dek) throw new Error('Journal must be unlocked to change password');
     const s = settingsRef.current;
     if (!s || !s.encryption_salt) throw new Error('Encryption salt missing');
 
     try {
-      const newWrappedPassphrase = await cryptoChangePassphrase(newPassphrase, s.encryption_salt, dek);
+      const newWrappedPassphrase = await cryptoChangePassphrase(newPassword, s.encryption_salt, dek);
 
       const { error } = await supabase
         .from('user_settings')
@@ -255,7 +258,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       return true;
     } catch (err) {
-      console.error('Failed to change passphrase:', err);
+      console.error('Failed to change password:', err);
       return false;
     }
   };
@@ -263,7 +266,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Lock session manually
   const lock = () => {
     setDek(null);
-    clearSessionDek();
+    clearDeviceDek();
     if (isEncryptionConfigured) {
       setShowUnlockModal(true);
     }

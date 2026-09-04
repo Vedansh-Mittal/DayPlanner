@@ -1,39 +1,44 @@
 import React, { useState } from 'react';
 import { useCrypto } from '../contexts/CryptoContext';
-import { Lock, Key, ShieldCheck, FileText, AlertCircle, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Lock, Key, ShieldCheck, AlertCircle, Loader2, ArrowRight, Eye, EyeOff, X } from 'lucide-react';
 
 export const EncryptionUnlockModal: React.FC = () => {
   const {
     showUnlockModal,
+    setShowUnlockModal,
     unlockWithPassphrase,
     unlockWithRecoveryKey,
     changePassphrase,
   } = useCrypto();
 
-  const [mode, setMode] = useState<'passphrase' | 'recovery' | 'reset-passphrase'>('passphrase');
-  const [passphrase, setPassphrase] = useState('');
+  const [mode, setMode] = useState<'password' | 'recovery' | 'reset-password'>('password');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [recoveryInput, setRecoveryInput] = useState('');
-  const [newPassphrase, setNewPassphrase] = useState('');
-  const [confirmPassphrase, setConfirmPassphrase] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   if (!showUnlockModal) return null;
 
-  const handleUnlockPassphrase = async (e: React.FormEvent) => {
+  const handleClose = () => {
+    setShowUnlockModal(false);
+  };
+
+  const handleUnlockPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!passphrase.trim()) return;
+    if (!password.trim()) return;
 
     setLoading(true);
     setError(null);
     try {
-      const success = await unlockWithPassphrase(passphrase);
+      const success = await unlockWithPassphrase(password);
       if (!success) {
-        setError('Incorrect passphrase. Please try again or use your recovery file.');
+        setError('Incorrect password. Please try again or use your recovery file.');
       } else {
-        setPassphrase('');
+        setPassword('');
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to unlock. Please try again.');
@@ -53,9 +58,8 @@ export const EncryptionUnlockModal: React.FC = () => {
       if (!success) {
         setError('Invalid recovery key or file content.');
       } else {
-        // Successfully recovered! Move to reset-passphrase so they have a fresh passphrase
-        setMode('reset-passphrase');
-        setSuccessMsg('Recovery verified! Now set a new passphrase to protect your journal.');
+        setMode('reset-password');
+        setSuccessMsg('Recovery verified! Now set a new password to protect your journal.');
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to verify recovery key.');
@@ -86,33 +90,32 @@ export const EncryptionUnlockModal: React.FC = () => {
     reader.readAsText(file);
   };
 
-  const handleResetPassphrase = async (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassphrase.length < 8) {
-      setError('Passphrase must be at least 8 characters long.');
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
-    if (newPassphrase !== confirmPassphrase) {
-      setError('Passphrases do not match.');
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
 
     setLoading(true);
     setError(null);
     try {
-      const ok = await changePassphrase(newPassphrase);
+      const ok = await changePassphrase(newPassword);
       if (ok) {
-        setMode('passphrase');
-        setPassphrase('');
+        setMode('password');
+        setPassword('');
         setRecoveryInput('');
-        setNewPassphrase('');
-        setConfirmPassphrase('');
-        // Modal will automatically close because DEK is unlocked
+        setNewPassword('');
+        setConfirmPassword('');
       } else {
-        setError('Failed to update passphrase. Please try again.');
+        setError('Failed to update password. Please try again.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Error updating passphrase.');
+      setError(err?.message || 'Error updating password.');
     } finally {
       setLoading(false);
     }
@@ -120,15 +123,25 @@ export const EncryptionUnlockModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-md bg-card-bg dark:bg-dark-card border border-border-default dark:border-dark-border rounded-2xl p-6 shadow-2xl">
+      <div className="relative w-full max-w-md bg-card-bg dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl">
+        {/* Dismiss / Close Button */}
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface dark:hover:bg-dark-surface transition-colors"
+          title="Dismiss"
+          aria-label="Close unlock modal"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
         {/* Header Icon */}
-        <div className="flex items-center space-x-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+        <div className="flex items-center space-x-3 mb-5 pr-8">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold shrink-0">
             <Lock className="w-5 h-5" />
           </div>
           <div>
             <h2 className="text-lg font-bold text-text-primary dark:text-dark-text">
-              {mode === 'reset-passphrase' ? 'Set New Passphrase' : 'Unlock Your Journal'}
+              {mode === 'reset-password' ? 'Set New Password' : 'Unlock Your Journal'}
             </h2>
             <p className="text-xs text-text-muted dark:text-dark-muted">
               Zero-Knowledge End-to-End Encryption
@@ -150,21 +163,21 @@ export const EncryptionUnlockModal: React.FC = () => {
           </div>
         )}
 
-        {/* Mode: Enter Passphrase */}
-        {mode === 'passphrase' && (
-          <form onSubmit={handleUnlockPassphrase} className="space-y-4">
+        {/* Mode: Enter Password */}
+        {mode === 'password' && (
+          <form onSubmit={handleUnlockPassword} className="space-y-4">
             <p className="text-xs text-text-muted dark:text-dark-muted">
-              Enter your journal passphrase to decrypt your reflections in this browser session.
+              Enter your encryption password to unlock and decrypt your journal.
             </p>
 
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
-                value={passphrase}
-                onChange={(e) => setPassphrase(e.target.value)}
-                placeholder="Enter your encryption passphrase"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your encryption password"
                 autoFocus
-                className="w-full px-4 py-2.5 pr-10 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default dark:border-dark-border text-sm text-text-primary dark:text-dark-text placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                className="w-full px-4 py-2.5 pr-10 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               />
               <button
                 type="button"
@@ -177,13 +190,13 @@ export const EncryptionUnlockModal: React.FC = () => {
 
             <button
               type="submit"
-              disabled={loading || !passphrase.trim()}
-              className="w-full py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+              disabled={loading || !password.trim()}
+              className="w-full py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm transition-all flex items-center justify-center space-x-2 disabled:opacity-50 shadow-sm"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Decrypting Master Key...</span>
+                  <span>Unlocking Journal...</span>
                 </>
               ) : (
                 <>
@@ -193,7 +206,7 @@ export const EncryptionUnlockModal: React.FC = () => {
               )}
             </button>
 
-            <div className="pt-2 border-t border-border-default dark:border-dark-border text-center">
+            <div className="pt-2 border-t border-border dark:border-dark-border flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => {
@@ -202,7 +215,14 @@ export const EncryptionUnlockModal: React.FC = () => {
                 }}
                 className="text-xs text-amber-500 hover:underline font-medium"
               >
-                Forgot passphrase? Use Recovery File / Key
+                Forgot password? Use Recovery Key
+              </button>
+              <button
+                type="button"
+                onClick={handleClose}
+                className="text-xs text-text-muted hover:text-text-primary transition-colors"
+              >
+                Skip for now
               </button>
             </div>
           </form>
@@ -212,7 +232,7 @@ export const EncryptionUnlockModal: React.FC = () => {
         {mode === 'recovery' && (
           <form onSubmit={handleUnlockRecovery} className="space-y-4">
             <p className="text-xs text-text-muted dark:text-dark-muted">
-              Upload your <code>daylight-recovery-key.json</code> file or paste your 16-character recovery key.
+              Upload your <code>daylight-recovery-key.json</code> file or enter your 16-character recovery key.
             </p>
 
             <div className="space-y-2">
@@ -236,7 +256,7 @@ export const EncryptionUnlockModal: React.FC = () => {
                 value={recoveryInput}
                 onChange={(e) => setRecoveryInput(e.target.value)}
                 placeholder="e.g. XKPQ-7HNT-4B2M-9W8Y"
-                className="w-full px-4 py-2.5 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default dark:border-dark-border text-sm font-mono text-text-primary dark:text-dark-text placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                className="w-full px-4 py-2.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm font-mono text-text-primary dark:text-dark-text placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               />
             </div>
 
@@ -258,57 +278,64 @@ export const EncryptionUnlockModal: React.FC = () => {
               )}
             </button>
 
-            <div className="pt-2 border-t border-border-default dark:border-dark-border text-center">
+            <div className="pt-2 border-t border-border dark:border-dark-border flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => {
-                  setMode('passphrase');
+                  setMode('password');
                   setError(null);
                 }}
                 className="text-xs text-text-muted hover:text-text-primary transition-colors"
               >
-                ← Back to passphrase unlock
+                ← Back to password unlock
+              </button>
+              <button
+                type="button"
+                onClick={handleClose}
+                className="text-xs text-text-muted hover:text-text-primary transition-colors"
+              >
+                Skip for now
               </button>
             </div>
           </form>
         )}
 
-        {/* Mode: Reset Passphrase after recovery */}
-        {mode === 'reset-passphrase' && (
-          <form onSubmit={handleResetPassphrase} className="space-y-4">
+        {/* Mode: Reset Password after recovery */}
+        {mode === 'reset-password' && (
+          <form onSubmit={handleResetPassword} className="space-y-4">
             <p className="text-xs text-text-muted dark:text-dark-muted">
-              Choose a new passphrase to protect your journal on this and future devices.
+              Choose a new password to protect your journal on this and future devices.
             </p>
 
             <div className="space-y-1">
               <label className="block text-xs font-medium text-text-primary dark:text-dark-text">
-                New Passphrase (min 8 chars)
+                New Password (min 8 chars)
               </label>
               <input
                 type="password"
-                value={newPassphrase}
-                onChange={(e) => setNewPassphrase(e.target.value)}
-                placeholder="New passphrase"
-                className="w-full px-4 py-2 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="New password"
+                className="w-full px-4 py-2 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               />
             </div>
 
             <div className="space-y-1">
               <label className="block text-xs font-medium text-text-primary dark:text-dark-text">
-                Confirm New Passphrase
+                Confirm New Password
               </label>
               <input
                 type="password"
-                value={confirmPassphrase}
-                onChange={(e) => setConfirmPassphrase(e.target.value)}
-                placeholder="Repeat new passphrase"
-                className="w-full px-4 py-2 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repeat new password"
+                className="w-full px-4 py-2 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               />
             </div>
 
             <button
               type="submit"
-              disabled={loading || !newPassphrase || !confirmPassphrase}
+              disabled={loading || !newPassword || !confirmPassword}
               className="w-full py-2.5 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-medium text-sm transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
             >
               {loading ? (
@@ -317,7 +344,7 @@ export const EncryptionUnlockModal: React.FC = () => {
                   <span>Updating Key Wrapper...</span>
                 </>
               ) : (
-                <span>Save New Passphrase & Unlock</span>
+                <span>Save New Password & Unlock</span>
               )}
             </button>
           </form>

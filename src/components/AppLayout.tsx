@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Sun, Calendar, BarChart3, Settings, LogOut, Sparkles } from 'lucide-react';
+import { Sun, Calendar, BarChart3, Settings, LogOut, Sparkles, Shield } from 'lucide-react';
 import { useAuthStore } from '../stores/auth-store';
 import { useUserSettings } from '../hooks/useUserSettings';
 import { Navigate } from 'react-router-dom';
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { to: '/app', label: 'Today', icon: Sun, end: true },
   { to: '/app/history', label: 'History', icon: Calendar, end: false },
   { to: '/app/insights', label: 'Insights', icon: Sparkles, end: false },
+  { to: '/app/security', label: 'Security', icon: Shield, end: false },
   { to: '/app/settings', label: 'Settings', icon: Settings, end: false },
 ];
 
