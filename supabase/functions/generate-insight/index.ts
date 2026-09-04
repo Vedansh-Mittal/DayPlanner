@@ -342,6 +342,12 @@ ${triviaEnabled ? `   - ### ✨ Tiny Spark
      (Write 1-2 fascinating sentences explaining a real scientific principle, psychological concept, or engineering trivia directly related to: ${interests})
      Source: Organization / Publication Name (strictly on this separate line below the spark text)` : ''}
 
+3.5. TARGETED SINGLE-FIELD / PRIORITIES QUERY [TAG: SCOPED_QUERY_FILTER_V1]:
+   (e.g., "what do you make out of my today's priorities", "focus on priorities", "what are my priorities for today", "analyze my priorities", "priorities of the day")
+   - STRICT FIELD ISOLATION: When the user asks specifically about their PRIORITIES (or any single field like mood or meals), focus strictly and exclusively on the priorities items!
+   - DO NOT pull in unrelated brain dumps, personal family/wedding thoughts, night notes, or unasked background life context unless specifically requested by the user.
+   - SINGLE-DAY BOUNDARY: If the user asked about "today's priorities" or a single date, do NOT list historical priorities from previous days (e.g. Sept 1–3). Restrict your entire answer to the priorities of that specific day!
+
 OFF-TOPIC GUARDRAIL:
 - If asked a purely academic, coding, or generic trivia question completely unrelated to their journal (e.g. "how to reverse a linkedlist in java"):
   Gently clarify: "I'm your personal Daylight journaling assistant, so I'm here to help you reflect on your journal entries, daily habits, and thoughts whenever you're ready! 🌸"`;
@@ -504,14 +510,15 @@ ${missingDaysCount > 0
 
     const systemPrompt = buildSystemPrompt(persona, displayName, question);
 
-    // Prepare multi-turn conversation contents for Gemini
-    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+    /* [TAG: CLEAN_HISTORY_TOKEN_OPTIMIZATION_V1] */
+    // Prepare multi-turn conversation contents for Gemini ensuring valid alternating user/model roles
+    const rawTurns: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
 
-    // Prior chat turns
+    // Prior chat turns (last 6 turns)
     if (Array.isArray(history) && history.length > 0) {
       for (const turn of history.slice(-6)) {
         if (turn.role && turn.text) {
-          contents.push({
+          rawTurns.push({
             role: turn.role === 'user' ? 'user' : 'model',
             parts: [{ text: turn.text }],
           });
@@ -532,43 +539,78 @@ ${formattedJournal}
 [USER QUESTION]
 ${question}`;
 
-    contents.push({
+    rawTurns.push({
       role: 'user',
       parts: [{ text: currentPrompt }],
     });
 
-    const modelCandidates = ['gemini-flash-lite-latest', 'gemini-1.5-flash', 'gemini-3.6-flash'];
+    // Enforce strict alternating roles (user -> model -> user) required by Gemini API
+    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+    for (const item of rawTurns) {
+      if (contents.length > 0 && contents[contents.length - 1].role === item.role) {
+        contents[contents.length - 1].parts[0].text += `\n\n${item.parts[0].text}`;
+      } else {
+        contents.push(item);
+      }
+    }
+
+    /* [TAG: UNBREAKABLE_MODEL_PIPELINE_V1] */
+    // Officially verified free-tier models in Google AI Studio ordered by speed, capability & quota resilience
+    const modelCandidates = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-1.5-flash',
+    ];
     let aiAnswer = '';
 
     if (geminiApiKey) {
       for (const model of modelCandidates) {
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-              contents,
-              generationConfig: {
-                temperature: 0.35,
-                maxOutputTokens: 3000,
-              },
-            }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-            if (text) {
-              aiAnswer = text;
+        // Attempt up to 2 times for transient 429 (rate-limit) or 503 (model capacity exhausted)
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents,
+                generationConfig: {
+                  temperature: 0.35,
+                  maxOutputTokens: 3000,
+                },
+              }),
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+              if (text) {
+                aiAnswer = text;
+                break; // Succeeded, exit attempt loop
+              }
+            } else {
+              console.warn(`Model ${model} (attempt ${attempt + 1}) returned status: ${res.status}`);
+              // If rate-limited or temporarily exhausted, pause 800ms before attempt 2
+              if ((res.status === 429 || res.status === 503) && attempt === 0) {
+                await new Promise((resolve) => setTimeout(resolve, 800));
+                continue;
+              }
+              // For 404 or other errors, immediately switch to next model candidate
               break;
             }
-          } else {
-            console.warn(`Model ${model} returned status:`, res.status);
+          } catch (e) {
+            console.warn(`Error calling ${model} (attempt ${attempt + 1}):`, e);
+            if (attempt === 0) {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+              continue;
+            }
+            break;
           }
-        } catch (e) {
-          console.warn(`Error calling ${model}:`, e);
         }
+
+        if (aiAnswer) break; // Succeeded, stop iterating model candidates
       }
     }
 

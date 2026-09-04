@@ -492,7 +492,9 @@ export const InsightsPage: React.FC = () => {
       setInputQuestion('');
       setLoading(true);
 
-      const historyForApi = updatedHistory.map((m) => ({
+      /* [TAG: CLEAN_HISTORY_TOKEN_OPTIMIZATION_V1] */
+      // Pass prior conversation turns as history so the edge function receives clean alternating turns without duplicating the active question
+      const historyForApi = messages.map((m) => ({
         role: m.role,
         text: m.text,
       }));
