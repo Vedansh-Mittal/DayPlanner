@@ -56,12 +56,47 @@ function hasMeaningfulData(e: any): boolean {
   return false;
 }
 
+/* [TAG: CONSOLIDATED_INSIGHT_ENGINE_V1] */
+function detectTargetField(question: string, history: any[] = []): 'priorities' | 'all' {
+  const q = question.toLowerCase();
+  if (q.includes('priorit') || q.includes('to-do') || q.includes('todo')) {
+    return 'priorities';
+  }
+  if (q.includes('detail') || q.includes('elaborate') || q.includes('more') || q.includes('explain') || q.includes('why') || q.includes('steps') || q.includes('help')) {
+    if (Array.isArray(history) && history.length > 0) {
+      const userTurns = history.filter((t: any) => t.role === 'user');
+      const lastUserQ = userTurns[userTurns.length - 1]?.text?.toLowerCase() || '';
+      if (lastUserQ.includes('priorit') || lastUserQ.includes('to-do') || lastUserQ.includes('todo')) {
+        return 'priorities';
+      }
+    }
+  }
+  return 'all';
+}
+
 /* ── Format Journal Entries for AI Context ───────────────────── */
-function formatJournalEntries(entries: any[]): string {
+function formatJournalEntries(entries: any[], targetField: 'priorities' | 'all' = 'all'): string {
   const validEntries = entries.filter(hasMeaningfulData);
   return validEntries.map((e) => {
     const parts: string[] = [];
     parts.push(`=== DATE: ${e.entry_date} ===`);
+
+    /* [TAG: CONSOLIDATED_INSIGHT_ENGINE_V1] */
+    if (targetField === 'priorities') {
+      // Deterministically ONLY include priorities and action steps.
+      // Brain dumps, notes, mood, and meals are physically excluded from the payload!
+      if (Array.isArray(e.priorities) && e.priorities.length) {
+        const pList = e.priorities.filter((p: any) => p && p.text?.trim()).map((p: any) => `"${p.text}" [${p.completed ? 'Completed' : 'Pending'}]`);
+        if (pList.length) parts.push(`Priorities: ${pList.join('; ')}`);
+      } else {
+        parts.push(`Priorities: None logged.`);
+      }
+      if (Array.isArray(e.action_steps) && e.action_steps.length) {
+        const aList = e.action_steps.filter((a: any) => a && a.text?.trim()).map((a: any) => `"${a.text}" [${a.completed ? 'Completed' : 'Pending'}]`);
+        if (aList.length) parts.push(`Action Steps: ${aList.join('; ')}`);
+      }
+      return parts.join('\n');
+    }
     if (e.daily_note) parts.push(`Daily Note: "${e.daily_note}"`);
     
     // Morning
@@ -184,11 +219,11 @@ function computeLongitudinalHabitBaseline(entries: any[]): string {
 /* [AI-ENHANCEMENT: HIERARCHICAL-WINDOW-SCALING] */
 // For long-term journals (>14 days), preserves full granular logs for the recent 14 days
 // while compressing older history into an aggregated baseline so prompts remain under ~2,500 tokens forever.
-function prepareHierarchicalJournalContext(entries: any[]): { contextText: string; isScaled: boolean } {
+function prepareHierarchicalJournalContext(entries: any[], targetField: 'priorities' | 'all' = 'all'): { contextText: string; isScaled: boolean } {
   const validEntries = entries.filter(hasMeaningfulData);
-  if (validEntries.length <= 14) {
+  if (targetField === 'priorities' || validEntries.length <= 14) {
     return {
-      contextText: formatJournalEntries(validEntries),
+      contextText: formatJournalEntries(validEntries, targetField),
       isScaled: false,
     };
   }
@@ -201,7 +236,7 @@ function prepareHierarchicalJournalContext(entries: any[]): { contextText: strin
 ${computeLongitudinalHabitBaseline(olderEntries)}
 • Sample Historical Wins: ${olderEntries.filter((e: any) => e.night_win).map((e: any) => `"${e.night_win}"`).slice(-3).join('; ') || 'None recorded'}`;
 
-  const recentDetail = formatJournalEntries(recentEntries);
+  const recentDetail = formatJournalEntries(recentEntries, targetField);
 
   return {
     contextText: `${olderSummary}\n\n=== RECENT GRANULAR LOGS (Last 14 days) ===\n${recentDetail}`,
@@ -468,11 +503,23 @@ Deno.serve(async (req) => {
       });
     }
 
+    /* [TAG: CONSOLIDATED_INSIGHT_ENGINE_V1] */
+    const targetField = detectTargetField(question, history);
+
+    // If query targets priorities or single-day reflection and multiple days were sent,
+    // lock context strictly to today's entry (or latest logged day) to eliminate data bleed
+    const isSingleDayOrToday = /(today|todays|tonight|this morning)/i.test(question) || (targetField === 'priorities' && (!startDate || startDate === 'all' || startDate === endDate));
+    if (isSingleDayOrToday && entries.length > 1) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayEntry = entries.find((e: any) => e.entry_date === todayStr);
+      entries = [todayEntry || entries[entries.length - 1]];
+    }
+
     /* [AI-ENHANCEMENT: HABIT-BASELINE-PRECOMPUTE] */
     const habitBaseline = computeLongitudinalHabitBaseline(entries);
 
     /* [AI-ENHANCEMENT: HIERARCHICAL-WINDOW-SCALING] */
-    const { contextText: formattedJournal, isScaled } = prepareHierarchicalJournalContext(entries);
+    const { contextText: formattedJournal, isScaled } = prepareHierarchicalJournalContext(entries, targetField);
 
     /* [AI-ENHANCEMENT: TEMPORAL-COMPLETENESS-METRIC] */
     let completenessNotice = '';
@@ -544,7 +591,12 @@ ${question}`;
       parts: [{ text: currentPrompt }],
     });
 
-    const modelCandidates = ['gemini-flash-lite-latest', 'gemini-1.5-flash', 'gemini-3.6-flash'];
+    /* [TAG: CONSOLIDATED_INSIGHT_ENGINE_V1] */
+    // Dynamic token budgeting: concise 600 tokens for standard queries, 1800 for comprehensive deep-dives
+    const isDeepDive = /(detail|elaborate|comprehensive|deep dive|essay|roadmap|stages|long|400 words|step-by-step|expand)/i.test(question);
+    const maxOutputTokens = isDeepDive ? 1800 : 600;
+
+    const modelCandidates = ['gemini-flash-lite-latest', 'gemini-1.5-flash', 'gemini-2.0-flash'];
     let aiAnswer = '';
 
     if (geminiApiKey) {
@@ -554,12 +606,13 @@ ${question}`;
           const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(8000),
             body: JSON.stringify({
               systemInstruction: { parts: [{ text: systemPrompt }] },
               contents,
               generationConfig: {
                 temperature: 0.35,
-                maxOutputTokens: 3000,
+                maxOutputTokens,
               },
             }),
           });
@@ -572,6 +625,13 @@ ${question}`;
             }
           } else {
             console.warn(`Model ${model} returned status:`, res.status);
+            if (res.status === 429) {
+              return jsonResponse({
+                type: 'rate-limited',
+                text: "Mewwmory is experiencing a brief surge in demand right now. Please wait a few moments and ask again! 🌸",
+                dateRange: { start: startDate || '', end: endDate || '' },
+              });
+            }
           }
         } catch (e) {
           console.warn(`Error calling ${model}:`, e);

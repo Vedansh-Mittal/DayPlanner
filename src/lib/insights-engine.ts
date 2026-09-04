@@ -41,6 +41,20 @@ export async function queryInsights(
     range = parseDateRange(question);
   }
 
+  /* [TAG: CONSOLIDATED_INSIGHT_ENGINE_V1] */
+  // If still no range, check if this is a follow-up to a previous single-day query in history
+  if (!range && history.length > 0) {
+    const qLower = question.toLowerCase();
+    const isFollowUp = /(detail|elaborate|more|explain|why|steps?|routine|plan|what\s+about|expand)/i.test(qLower);
+    if (isFollowUp) {
+      const userTurns = history.filter((h) => h.role === 'user');
+      const lastUserText = userTurns[userTurns.length - 1]?.text || '';
+      if (hasExplicitDate(lastUserText)) {
+        range = parseDateRange(lastUserText);
+      }
+    }
+  }
+
   try {
     const formattedHistory = history.map((h) => ({
       role: h.role === 'assistant' ? 'model' : 'user',
