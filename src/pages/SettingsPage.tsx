@@ -10,7 +10,7 @@ import {
   Settings as SettingsIcon, User, Globe, Clock, Droplets, Bell,
   Palette, LogOut, Trash2, Loader2, Check, Sun, Moon, Monitor,
   Download, Upload, FileText, Sparkles, Compass, Target, Lightbulb, Smile, BookOpen, Briefcase,
-  Shield, Smartphone, Share2, Lock, Eye, EyeOff, AlertCircle, X, Package, ShieldCheck
+  Shield, Smartphone, Share2, Lock, Eye, EyeOff, AlertCircle, X, Package, ShieldCheck, KeyRound
 } from 'lucide-react';
 import { useCrypto } from '../contexts/CryptoContext';
 import { encryptBackupPayload, decryptBackupPayload } from '../lib/crypto';
@@ -63,6 +63,8 @@ export const SettingsPage: React.FC = () => {
   // Encryption (E2EE)
   const {
     isEncryptionConfigured,
+    isUnlocked,
+    setShowUnlockModal,
     cachedPassphrase,
     decryptDailyEntry,
     decryptPrioritiesList,
@@ -98,6 +100,7 @@ export const SettingsPage: React.FC = () => {
   const [showImportPassword, setShowImportPassword] = useState(false);
   const [importPasswordError, setImportPasswordError] = useState<string | null>(null);
   const [importingFromEncrypted, setImportingFromEncrypted] = useState(false);
+  const [showSetupEncryptionPrompt, setShowSetupEncryptionPrompt] = useState(false);
 
   const handleExportJSON = () => {
     setShowExportModal(true);
@@ -280,8 +283,20 @@ export const SettingsPage: React.FC = () => {
         return;
       }
 
+      // If the journal is configured but locked, prompt to unlock first so entries can be encrypted
+      if (isEncryptionConfigured && !isUnlocked) {
+        setShowUnlockModal(true);
+        alert('Please unlock your journal with your master password first to restore your entries.');
+        return;
+      }
+
       // Check if this is an encrypted backup container
       if (parsed.daylight_backup_encrypted || parsed.format === 'daylight-encrypted-backup-v1') {
+        if (!isEncryptionConfigured) {
+          setShowSetupEncryptionPrompt(true);
+          return;
+        }
+
         setPendingEncryptedBackup(parsed);
         setImportPassword('');
         setImportPasswordError(null);
@@ -1570,6 +1585,63 @@ export const SettingsPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Modal Prompting to Setup Encryption First */}
+      {showSetupEncryptionPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-md bg-card-bg dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-4">
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => setShowSetupEncryptionPrompt(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface dark:hover:bg-dark-surface transition-colors"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center space-x-3 pr-8">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold shrink-0">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-text-primary dark:text-dark-text">
+                  Enable Encryption First
+                </h3>
+                <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                  Encrypted Backup Detected
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-text-secondary dark:text-dark-text-secondary leading-relaxed">
+              This backup file is protected with client-side Zero-Knowledge encryption. To keep your restored journal private and encrypted in this account, please enable encryption in Security settings first.
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSetupEncryptionPrompt(false)}
+                className="btn-ghost flex-1 py-2.5 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSetupEncryptionPrompt(false);
+                  navigate('/app/security');
+                }}
+                className="btn-primary flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>Go to Security</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
