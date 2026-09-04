@@ -200,6 +200,18 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
               </div>
             </div>
 
+            <input
+              type="text"
+              name="username"
+              id="setup-username"
+              value={user?.email || ''}
+              autoComplete="username"
+              readOnly
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only pointer-events-none"
+            />
+
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-text-primary dark:text-dark-text mb-1">
@@ -207,10 +219,13 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
                 </label>
                 <div className="relative">
                   <input
+                    id="setup-password"
+                    name="password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your encryption password"
+                    autoComplete="new-password"
                     autoFocus
                     className="w-full px-4 py-2.5 pr-10 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                   />
@@ -229,10 +244,13 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
                   Confirm Password
                 </label>
                 <input
+                  id="setup-confirm-password"
+                  name="confirm-password"
                   type={showPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter password"
+                  autoComplete="new-password"
                   className="w-full px-4 py-2.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                 />
               </div>

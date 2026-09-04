@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useCrypto } from '../contexts/CryptoContext';
+import { useAuthStore } from '../stores/auth-store';
 import { Lock, Key, ShieldCheck, AlertCircle, Loader2, ArrowRight, Eye, EyeOff, X } from 'lucide-react';
 
 export const EncryptionUnlockModal: React.FC = () => {
+  const user = useAuthStore((s) => s.user);
   const {
     showUnlockModal,
     setShowUnlockModal,
@@ -176,16 +178,32 @@ export const EncryptionUnlockModal: React.FC = () => {
         {/* Mode: Enter Password */}
         {mode === 'password' && (
           <form onSubmit={handleUnlockPassword} className="space-y-4">
+            {/* Hidden username input so browsers and password managers (Keychain, Chrome, Touch ID) link this password to the user's account */}
+            <input
+              type="text"
+              name="username"
+              id="unlock-username"
+              value={user?.email || ''}
+              autoComplete="username"
+              readOnly
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only pointer-events-none"
+            />
+
             <p className="text-xs text-text-muted dark:text-dark-muted">
-              Enter your encryption password to unlock and decrypt your journal.
+              Enter or autofill your encryption password to unlock and decrypt your journal.
             </p>
 
             <div className="relative">
               <input
+                id="unlock-password"
+                name="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your encryption password"
+                autoComplete="current-password"
                 autoFocus
                 className="w-full px-4 py-2.5 pr-10 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               />
@@ -313,6 +331,17 @@ export const EncryptionUnlockModal: React.FC = () => {
         {/* Mode: Reset Password after recovery */}
         {mode === 'reset-password' && (
           <form onSubmit={handleResetPassword} className="space-y-4">
+            <input
+              type="text"
+              name="username"
+              value={user?.email || ''}
+              autoComplete="username"
+              readOnly
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only pointer-events-none"
+            />
+
             <p className="text-xs text-text-muted dark:text-dark-muted">
               Choose a new password to protect your journal on this and future devices.
             </p>
@@ -322,10 +351,13 @@ export const EncryptionUnlockModal: React.FC = () => {
                 New Password (min 8 chars)
               </label>
               <input
+                id="reset-new-password"
+                name="password"
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="New password"
+                autoComplete="new-password"
                 className="w-full px-4 py-2 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               />
             </div>
@@ -335,10 +367,13 @@ export const EncryptionUnlockModal: React.FC = () => {
                 Confirm New Password
               </label>
               <input
+                id="reset-confirm-password"
+                name="confirm-password"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Repeat new password"
+                autoComplete="new-password"
                 className="w-full px-4 py-2 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               />
             </div>

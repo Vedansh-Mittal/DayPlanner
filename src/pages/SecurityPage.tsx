@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCrypto } from '../contexts/CryptoContext';
+import { useAuthStore } from '../stores/auth-store';
 import { EncryptionSetupModal } from '../components/EncryptionSetupModal';
 import {
   Shield, Key, Check, AlertCircle, Loader2,
@@ -7,6 +8,7 @@ import {
 } from 'lucide-react';
 
 export const SecurityPage: React.FC = () => {
+  const user = useAuthStore((s) => s.user);
   const {
     isEncryptionConfigured,
     isUnlocked,
@@ -239,14 +241,28 @@ export const SecurityPage: React.FC = () => {
               }}
               className="space-y-3"
             >
+              <input
+                type="text"
+                name="username"
+                value={user?.email || ''}
+                autoComplete="username"
+                readOnly
+                tabIndex={-1}
+                aria-hidden="true"
+                className="sr-only pointer-events-none"
+              />
+
               <div>
                 <label className="block text-xs font-semibold mb-1">New Password (min 8 chars)</label>
                 <div className="relative">
                   <input
+                    id="security-new-password"
+                    name="password"
                     type={showPass ? 'text' : 'password'}
                     value={newPass}
                     onChange={(e) => setNewPass(e.target.value)}
                     placeholder="Enter new password"
+                    autoComplete="new-password"
                     className="w-full px-4 py-2.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm"
                   />
                   <button
@@ -262,10 +278,13 @@ export const SecurityPage: React.FC = () => {
               <div>
                 <label className="block text-xs font-semibold mb-1">Confirm New Password</label>
                 <input
+                  id="security-confirm-password"
+                  name="confirm-password"
                   type={showPass ? 'text' : 'password'}
                   value={confirmNewPass}
                   onChange={(e) => setConfirmNewPass(e.target.value)}
                   placeholder="Repeat new password"
+                  autoComplete="new-password"
                   className="w-full px-4 py-2.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm"
                 />
               </div>

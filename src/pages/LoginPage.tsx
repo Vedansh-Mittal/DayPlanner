@@ -52,13 +52,19 @@ export const LoginPage: React.FC = () => {
           {!sent ? (
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label htmlFor="email" className="block text-sm font-semibold mb-1.5 text-text-secondary dark:text-dark-text-secondary">
-                  Email address
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label htmlFor="email" className="block text-sm font-semibold text-text-secondary dark:text-dark-text-secondary">
+                    Email address
+                  </label>
+                  <span className="text-[11px] font-semibold text-lavender-dark dark:text-lavender bg-lavender/10 dark:bg-lavender/20 px-2 py-0.5 rounded-full">
+                    Magic link only
+                  </span>
+                </div>
                 <div className="relative">
                   <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
                   <input
                     id="email"
+                    name="email"
                     type="email"
                     className="input-field pl-10"
                     placeholder="you@example.com"
@@ -92,9 +98,14 @@ export const LoginPage: React.FC = () => {
                 )}
               </button>
 
-              <p className="text-xs text-center text-text-muted dark:text-dark-text-muted">
-                No password needed. We'll email you a secure login link.
-              </p>
+              <div className="pt-1 text-center space-y-1">
+                <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                  ✨ No password needed to sign in. We'll email you a secure link.
+                </p>
+                <p className="text-[11px] text-text-muted/80 dark:text-dark-text-muted/80">
+                  Your encryption password is only used to decrypt your journal after logging in.
+                </p>
+              </div>
             </form>
           ) : (
             <div className="text-center py-4 space-y-4">
