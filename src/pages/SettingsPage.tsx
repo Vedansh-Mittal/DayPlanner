@@ -63,6 +63,7 @@ export const SettingsPage: React.FC = () => {
   // Encryption (E2EE)
   const {
     isEncryptionConfigured,
+    cachedPassphrase,
     decryptDailyEntry,
     decryptPrioritiesList,
     decryptActionStepsList,
@@ -84,8 +85,11 @@ export const SettingsPage: React.FC = () => {
   // Export Modal state (3 options: plain, encrypted, both)
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFormat, setExportFormat] = useState<'plain' | 'encrypted' | 'both'>('both');
-  const [exportPassword, setExportPassword] = useState('');
-  const [showExportPassword, setShowExportPassword] = useState(false);
+  const [passwordChoice, setPasswordChoice] = useState<'current' | 'custom'>('current');
+  const [customPassword, setCustomPassword] = useState('');
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
+  const [showCustomPassword, setShowCustomPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
   // Encrypted Import Password Modal state
@@ -98,14 +102,29 @@ export const SettingsPage: React.FC = () => {
   const handleExportJSON = () => {
     setShowExportModal(true);
     setExportError(null);
-    setExportPassword('');
+    setPasswordChoice(isEncryptionConfigured ? 'current' : 'custom');
+    setCustomPassword('');
+    setCurrentPasswordInput('');
   };
 
   const executeExport = async () => {
     if (!user) return;
-    if ((exportFormat === 'encrypted' || exportFormat === 'both') && exportPassword.length < 8) {
-      setExportError('Password must be at least 8 characters long.');
-      return;
+    
+    let activePassword = '';
+    if (exportFormat === 'encrypted' || exportFormat === 'both') {
+      if (isEncryptionConfigured && passwordChoice === 'current') {
+        activePassword = cachedPassphrase || currentPasswordInput.trim();
+        if (!activePassword) {
+          setExportError('Please enter your current journal password.');
+          return;
+        }
+      } else {
+        activePassword = customPassword.trim();
+        if (activePassword.length < 8) {
+          setExportError('Password must be at least 8 characters long.');
+          return;
+        }
+      }
     }
 
     setBackingUp(true);
@@ -162,7 +181,7 @@ export const SettingsPage: React.FC = () => {
       }
 
       if (exportFormat === 'encrypted' || exportFormat === 'both') {
-        const encryptedPayload = await encryptBackupPayload(backupData, exportPassword);
+        const encryptedPayload = await encryptBackupPayload(backupData, activePassword);
         triggerDownload(
           JSON.stringify(encryptedPayload, null, 2),
           `mewwmory_backup_${dateStr}_encrypted.json`
@@ -170,7 +189,8 @@ export const SettingsPage: React.FC = () => {
       }
 
       setShowExportModal(false);
-      setExportPassword('');
+      setCustomPassword('');
+      setCurrentPasswordInput('');
     } catch (err: any) {
       console.error('Export error:', err);
       setExportError(err?.message || 'Export failed. Please try again.');
@@ -309,6 +329,24 @@ export const SettingsPage: React.FC = () => {
         return;
       }
 
+      // Decrypt all entries for human-readable print/PDF output
+      const decryptedEntries = await Promise.all(
+        (entries || []).map(async (entry: any) => {
+          const dec = await decryptDailyEntry(entry);
+          const decP = await decryptPrioritiesList(entry.priorities || []);
+          const decA = await decryptActionStepsList(entry.action_steps || []);
+          const decM = await decryptMealsList(entry.meals || []);
+          const decMeds = await decryptMedicationsList(entry.medications || []);
+          return {
+            ...dec,
+            priorities: decP,
+            action_steps: decA,
+            meals: decM,
+            medications: decMeds,
+          };
+        })
+      );
+
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         printWindow.document.write(`
@@ -337,7 +375,7 @@ export const SettingsPage: React.FC = () => {
             <body>
               <h1>Mewwmory</h1>
               <div class="subtitle">Personal Journal Digest • Generated on ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-              ${entries.map(e => {
+              ${decryptedEntries.map(e => {
           const datePretty = new Date(e.entry_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
           const morningStatusBadge = e.morning_completed ? '<span class="badge badge-completed">Complete</span>' : '<span class="badge badge-pending">In Progress</span>';
           const nightStatusBadge = e.night_completed ? '<span class="badge badge-completed">Complete</span>' : '<span class="badge badge-pending">In Progress</span>';
@@ -529,21 +567,40 @@ export const SettingsPage: React.FC = () => {
         .select('*, priorities(*), action_steps(*), meals(*), wind_down_items(*), medications(*)')
         .eq('user_id', user.id);
 
+      // Decrypt entries so the user's emergency backup is clean, readable plain text JSON
+      const decryptedEntries = await Promise.all(
+        (entries || []).map(async (entry: any) => {
+          const dec = await decryptDailyEntry(entry);
+          const decP = await decryptPrioritiesList(entry.priorities || []);
+          const decA = await decryptActionStepsList(entry.action_steps || []);
+          const decM = await decryptMealsList(entry.meals || []);
+          const decMeds = await decryptMedicationsList(entry.medications || []);
+          return {
+            ...dec,
+            priorities: decP,
+            action_steps: decA,
+            meals: decM,
+            medications: decMeds,
+          };
+        })
+      );
+
       const backupData = {
         exported_at: new Date().toISOString(),
         user_id: user.id,
-        entries: entries || []
+        entries: decryptedEntries,
       };
 
-      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
-        JSON.stringify(backupData, null, 2)
-      )}`;
+      const dateStr = new Date().toISOString().split('T')[0];
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
       const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute('href', jsonString);
-      downloadAnchor.setAttribute('download', `daylight_planner_pre_delete_backup_${new Date().toISOString().split('T')[0]}.json`);
+      downloadAnchor.href = url;
+      downloadAnchor.download = `mewwmory_pre_delete_backup_${dateStr}.json`;
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
 
       // 2. Clear local browser offline cache
       localStorage.removeItem('daylight_offline_cache');
@@ -1165,7 +1222,8 @@ export const SettingsPage: React.FC = () => {
               onClick={() => {
                 setShowExportModal(false);
                 setExportError(null);
-                setExportPassword('');
+                setCustomPassword('');
+                setCurrentPasswordInput('');
               }}
               className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface dark:hover:bg-dark-surface transition-colors"
               title="Close"
@@ -1271,29 +1329,98 @@ export const SettingsPage: React.FC = () => {
 
             {/* Password input for Encrypted / Both options */}
             {(exportFormat === 'encrypted' || exportFormat === 'both') && (
-              <div className="p-3.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border/60 dark:border-dark-border/60 space-y-2">
-                <label className="block text-xs font-bold text-text-primary dark:text-dark-text">
-                  Set password for the encrypted backup:
-                </label>
-                <div className="relative">
-                  <input
-                    type={showExportPassword ? 'text' : 'password'}
-                    value={exportPassword}
-                    onChange={(e) => setExportPassword(e.target.value)}
-                    placeholder="Enter backup password (min. 8 characters)"
-                    className="w-full px-3.5 py-2 pr-10 rounded-lg bg-surface dark:bg-dark-surface border border-border dark:border-dark-border text-xs text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowExportPassword(!showExportPassword)}
-                    className="absolute right-3 top-2 text-text-muted hover:text-text-primary"
-                  >
-                    {showExportPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
+              <div className="p-3.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border/60 dark:border-dark-border/60 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="block text-xs font-bold text-text-primary dark:text-dark-text">
+                    Password for Encrypted Backup:
+                  </label>
+                  {isEncryptionConfigured && (
+                    <div className="inline-flex rounded-lg bg-surface dark:bg-dark-surface p-0.5 border border-border dark:border-dark-border text-[11px] font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setPasswordChoice('current')}
+                        className={`px-2.5 py-1 rounded-md transition-all ${
+                          passwordChoice === 'current'
+                            ? 'bg-lavender text-white font-bold shadow-xs'
+                            : 'text-text-muted hover:text-text-primary'
+                        }`}
+                      >
+                        Use Current Password
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPasswordChoice('custom')}
+                        className={`px-2.5 py-1 rounded-md transition-all ${
+                          passwordChoice === 'custom'
+                            ? 'bg-lavender text-white font-bold shadow-xs'
+                            : 'text-text-muted hover:text-text-primary'
+                        }`}
+                      >
+                        Set New Password
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <p className="text-[11px] text-text-muted dark:text-dark-text-muted">
-                  ⚠️ Anyone restoring the encrypted file will strictly need this password.
-                </p>
+
+                {/* Sub-view: Use Current Password */}
+                {isEncryptionConfigured && passwordChoice === 'current' ? (
+                  cachedPassphrase ? (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2.5">
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                      <div>
+                        <div className="font-bold">Using Current Journal Password</div>
+                        <div className="text-[11px] opacity-80 mt-0.5">
+                          Your backup will be encrypted with the same password you use to unlock your notes.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="relative">
+                        <input
+                          type={showCurrentPassword ? 'text' : 'password'}
+                          value={currentPasswordInput}
+                          onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                          placeholder="Confirm your current journal password"
+                          className="w-full px-3.5 py-2 pr-10 rounded-lg bg-surface dark:bg-dark-surface border border-border dark:border-dark-border text-xs text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                          className="absolute right-3 top-2 text-text-muted hover:text-text-primary"
+                        >
+                          {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-text-muted dark:text-dark-text-muted">
+                        Enter your active journal password to lock this backup copy.
+                      </p>
+                    </div>
+                  )
+                ) : (
+                  /* Sub-view: Set New Password */
+                  <div className="space-y-1.5">
+                    <div className="relative">
+                      <input
+                        type={showCustomPassword ? 'text' : 'password'}
+                        value={customPassword}
+                        onChange={(e) => setCustomPassword(e.target.value)}
+                        placeholder="Enter a new password for this backup (min. 8 characters)"
+                        className="w-full px-3.5 py-2 pr-10 rounded-lg bg-surface dark:bg-dark-surface border border-border dark:border-dark-border text-xs text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomPassword(!showCustomPassword)}
+                        className="absolute right-3 top-2 text-text-muted hover:text-text-primary"
+                      >
+                        {showCustomPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-text-muted dark:text-dark-text-muted">
+                      ⚠️ Anyone restoring this encrypted file will strictly need this new password.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1312,7 +1439,8 @@ export const SettingsPage: React.FC = () => {
                 onClick={() => {
                   setShowExportModal(false);
                   setExportError(null);
-                  setExportPassword('');
+                  setCustomPassword('');
+                  setCurrentPasswordInput('');
                 }}
                 className="btn-ghost flex-1 py-2.5 text-xs font-semibold"
               >
@@ -1321,7 +1449,13 @@ export const SettingsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={executeExport}
-                disabled={backingUp || ((exportFormat === 'encrypted' || exportFormat === 'both') && !exportPassword.trim())}
+                disabled={
+                  backingUp ||
+                  ((exportFormat === 'encrypted' || exportFormat === 'both') &&
+                    (passwordChoice === 'current' && isEncryptionConfigured
+                      ? !cachedPassphrase && !currentPasswordInput.trim()
+                      : !customPassword.trim()))
+                }
                 className="btn-primary flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
               >
                 {backingUp ? (

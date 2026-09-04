@@ -28,6 +28,7 @@ interface CryptoContextType {
   isEncryptionConfigured: boolean;
   isUnlocked: boolean;
   dek: CryptoKey | null;
+  cachedPassphrase: string | null;
   isLoadingCrypto: boolean;
   showUnlockModal: boolean;
   setShowUnlockModal: (show: boolean) => void;
@@ -55,6 +56,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const user = useAuthStore((s) => s.user);
   const [isEncryptionConfigured, setIsEncryptionConfigured] = useState(false);
   const [dek, setDek] = useState<CryptoKey | null>(null);
+  const [cachedPassphrase, setCachedPassphrase] = useState<string | null>(null);
   const [isLoadingCrypto, setIsLoadingCrypto] = useState(true);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const settingsRef = useRef<UserSettings | null>(null);
@@ -83,6 +85,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     sessionStorage.removeItem(DEVICE_DEK_KEY);
     sessionStorage.removeItem(SESSION_UNLOCKED_KEY);
     localStorage.removeItem(DEVICE_DEK_KEY);
+    setCachedPassphrase(null);
     if (userId) {
       sessionStorage.removeItem(`${DEVICE_DEK_KEY}_${userId}`);
       localStorage.removeItem(`${DEVICE_DEK_KEY}_${userId}`);
@@ -178,6 +181,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       );
 
       setDek(unlockedDek);
+      setCachedPassphrase(passphrase);
       await saveDekToDevice(unlockedDek, user?.id);
       setShowUnlockModal(false);
       return true;
@@ -237,6 +241,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Update state
     setDek(result.dek);
+    setCachedPassphrase(password);
     await saveDekToDevice(result.dek, user?.id);
     setIsEncryptionConfigured(true);
     setShowUnlockModal(false);
@@ -275,6 +280,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (settingsRef.current) {
         settingsRef.current.wrapped_key_passphrase = newWrappedPassphrase;
       }
+      setCachedPassphrase(newPassword);
       return true;
     } catch (err) {
       console.error('Failed to change password:', err);
@@ -345,6 +351,7 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isEncryptionConfigured,
         isUnlocked,
         dek,
+        cachedPassphrase,
         isLoadingCrypto,
         showUnlockModal,
         setShowUnlockModal,
