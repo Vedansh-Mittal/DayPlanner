@@ -444,7 +444,13 @@ const CalendarRangePicker: React.FC<{
 /* ── Main Insights Page Component ──────────────────────────── */
 export const InsightsPage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
-  const { dek } = useCrypto();
+  const { dek, isUnlocked } = useCrypto();
+  /* [TAG: INSIGHTS_DEK_DEPENDENCY_FIX_V1] */
+  const dekRef = useRef<CryptoKey | null>(dek);
+  useEffect(() => {
+    dekRef.current = dek;
+  }, [dek]);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputQuestion, setInputQuestion] = useState('');
   const [loading, setLoading] = useState(false);
@@ -492,7 +498,9 @@ export const InsightsPage: React.FC = () => {
       }));
 
       try {
-        const res = await queryInsights(user.id, textToSend.trim(), currentRange, historyForApi, dek);
+        /* [TAG: INSIGHTS_DEK_DEPENDENCY_FIX_V1] */
+        const activeDek = dekRef.current || dek;
+        const res = await queryInsights(user.id, textToSend.trim(), currentRange, historyForApi, activeDek);
 
         const aiMsg: ChatMessage = {
           id: `ai-${Date.now()}`,
@@ -517,7 +525,7 @@ export const InsightsPage: React.FC = () => {
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 100);
     },
-    [user, loading, messages, currentRange]
+    [user, loading, messages, currentRange, dek, isUnlocked]
   );
 
   const handleClearThread = () => {

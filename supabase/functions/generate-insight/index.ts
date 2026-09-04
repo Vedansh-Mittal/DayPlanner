@@ -543,7 +543,9 @@ ${question}`;
       parts: [{ text: currentPrompt }],
     });
 
-    const modelCandidates = ['gemini-flash-lite-latest', 'gemini-1.5-flash', 'gemini-3.6-flash'];
+    /* [TAG: PRODUCTION_MODEL_PIPELINE_V1] */
+    // Prioritize high-accuracy production models directly to eliminate 404 latency penalty
+    const modelCandidates = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
     let aiAnswer = '';
 
     if (geminiApiKey) {
