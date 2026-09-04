@@ -293,6 +293,7 @@ export const SettingsPage: React.FC = () => {
       // Check if this is an encrypted backup container
       if (parsed.daylight_backup_encrypted || parsed.format === 'daylight-encrypted-backup-v1') {
         if (!isEncryptionConfigured) {
+          setPendingEncryptedBackup(null);
           setShowSetupEncryptionPrompt(true);
           return;
         }
