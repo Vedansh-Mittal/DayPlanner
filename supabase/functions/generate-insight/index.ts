@@ -56,71 +56,12 @@ function hasMeaningfulData(e: any): boolean {
   return false;
 }
 
-/* [TAG: DETERMINISTIC_CONTEXT_SCOPING_V1] */
-function detectTargetField(question: string, history: any[] = []): 'priorities' | 'all' {
-  const q = question.toLowerCase();
-  if (q.includes('priorit') || q.includes('to-do') || q.includes('todo')) {
-    return 'priorities';
-  }
-  // Follow-up queries without an explicit field (e.g. "explain me in more detail", "give steps")
-  if (q.includes('detail') || q.includes('elaborate') || q.includes('more') || q.includes('explain') || q.includes('why') || q.includes('steps') || q.includes('help')) {
-    if (Array.isArray(history) && history.length > 0) {
-      const userTurns = history.filter((t: any) => t.role === 'user');
-      const lastUserQ = userTurns[userTurns.length - 1]?.text?.toLowerCase() || '';
-      if (lastUserQ.includes('priorit') || lastUserQ.includes('to-do') || lastUserQ.includes('todo')) {
-        return 'priorities';
-      }
-    }
-  }
-  return 'all';
-}
-
-/* [TAG: TEMPORAL_DATE_LOCK_V1] */
-function detectSingleDayLock(question: string, history: any[] = [], startDate?: string, endDate?: string): boolean {
-  const q = question.toLowerCase();
-  if (q.includes('today') || (startDate && endDate && startDate === endDate && startDate !== 'all')) {
-    return true;
-  }
-  if (q.includes('priorit') && !q.includes('past') && !q.includes('all') && !q.includes('week') && !q.includes('month') && !q.includes('trend')) {
-    return true;
-  }
-  // Follow-up queries
-  if (q.includes('detail') || q.includes('elaborate') || q.includes('more') || q.includes('explain') || q.includes('why') || q.includes('steps')) {
-    if (Array.isArray(history) && history.length > 0) {
-      const userTurns = history.filter((t: any) => t.role === 'user');
-      const lastUserQ = userTurns[userTurns.length - 1]?.text?.toLowerCase() || '';
-      if (lastUserQ.includes('today') || (lastUserQ.includes('priorit') && !lastUserQ.includes('all') && !lastUserQ.includes('trend'))) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 /* ── Format Journal Entries for AI Context ───────────────────── */
-function formatJournalEntries(entries: any[], targetField: 'priorities' | 'all' = 'all'): string {
+function formatJournalEntries(entries: any[]): string {
   const validEntries = entries.filter(hasMeaningfulData);
   return validEntries.map((e) => {
     const parts: string[] = [];
     parts.push(`=== DATE: ${e.entry_date} ===`);
-
-    /* [TAG: DETERMINISTIC_CONTEXT_SCOPING_V1] */
-    if (targetField === 'priorities') {
-      // Deterministically ONLY include priorities and action steps.
-      // Brain dumps, notes, mood, and meals are physically excluded from the payload!
-      if (Array.isArray(e.priorities) && e.priorities.length) {
-        const pList = e.priorities.filter((p: any) => p && p.text?.trim()).map((p: any) => `"${p.text}" [${p.completed ? 'Completed' : 'Pending'}]`);
-        if (pList.length) parts.push(`Priorities: ${pList.join('; ')}`);
-      } else {
-        parts.push(`Priorities: None logged.`);
-      }
-      if (Array.isArray(e.action_steps) && e.action_steps.length) {
-        const aList = e.action_steps.filter((a: any) => a && a.text?.trim()).map((a: any) => `"${a.text}" [${a.completed ? 'Completed' : 'Pending'}]`);
-        if (aList.length) parts.push(`Action Steps: ${aList.join('; ')}`);
-      }
-      return parts.join('\n');
-    }
-
     if (e.daily_note) parts.push(`Daily Note: "${e.daily_note}"`);
     
     // Morning
@@ -243,11 +184,11 @@ function computeLongitudinalHabitBaseline(entries: any[]): string {
 /* [AI-ENHANCEMENT: HIERARCHICAL-WINDOW-SCALING] */
 // For long-term journals (>14 days), preserves full granular logs for the recent 14 days
 // while compressing older history into an aggregated baseline so prompts remain under ~2,500 tokens forever.
-function prepareHierarchicalJournalContext(entries: any[], targetField: 'priorities' | 'all' = 'all'): { contextText: string; isScaled: boolean } {
+function prepareHierarchicalJournalContext(entries: any[]): { contextText: string; isScaled: boolean } {
   const validEntries = entries.filter(hasMeaningfulData);
-  if (targetField === 'priorities' || validEntries.length <= 14) {
+  if (validEntries.length <= 14) {
     return {
-      contextText: formatJournalEntries(validEntries, targetField),
+      contextText: formatJournalEntries(validEntries),
       isScaled: false,
     };
   }
@@ -260,7 +201,7 @@ function prepareHierarchicalJournalContext(entries: any[], targetField: 'priorit
 ${computeLongitudinalHabitBaseline(olderEntries)}
 • Sample Historical Wins: ${olderEntries.filter((e: any) => e.night_win).map((e: any) => `"${e.night_win}"`).slice(-3).join('; ') || 'None recorded'}`;
 
-  const recentDetail = formatJournalEntries(recentEntries, targetField);
+  const recentDetail = formatJournalEntries(recentEntries);
 
   return {
     contextText: `${olderSummary}\n\n=== RECENT GRANULAR LOGS (Last 14 days) ===\n${recentDetail}`,
@@ -527,32 +468,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    /* [TAG: TEMPORAL_DATE_LOCK_V1] */
-    // If user asked about today, or a specific day's priorities, or follows up on today:
-    // lock entries strictly to the single active day to eliminate historical drift!
-    const shouldLockSingleDay = detectSingleDayLock(question, history, startDate, endDate);
-    if (shouldLockSingleDay && entries.length > 1) {
-      entries.sort((a, b) => a.entry_date.localeCompare(b.entry_date));
-      const todayStr = new Date().toISOString().split('T')[0];
-      const todayEntry = entries.find(e => e.entry_date === todayStr);
-      entries = todayEntry ? [todayEntry] : [entries[entries.length - 1]];
-    }
-
-    /* [TAG: DETERMINISTIC_CONTEXT_SCOPING_V1] */
-    // Detect if the query or its active follow-up targets a specific field (e.g. priorities)
-    const targetField = detectTargetField(question, history);
-
     /* [AI-ENHANCEMENT: HABIT-BASELINE-PRECOMPUTE] */
-    const habitBaseline = targetField === 'priorities'
-      ? 'Focus strictly on the provided priorities for this day.'
-      : computeLongitudinalHabitBaseline(entries);
+    const habitBaseline = computeLongitudinalHabitBaseline(entries);
 
     /* [AI-ENHANCEMENT: HIERARCHICAL-WINDOW-SCALING] */
-    const { contextText: formattedJournal, isScaled } = prepareHierarchicalJournalContext(entries, targetField);
+    const { contextText: formattedJournal, isScaled } = prepareHierarchicalJournalContext(entries);
 
     /* [AI-ENHANCEMENT: TEMPORAL-COMPLETENESS-METRIC] */
     let completenessNotice = '';
-    if (targetField !== 'priorities' && startDate && endDate && startDate !== 'all' && endDate !== 'all') {
+    if (startDate && endDate && startDate !== 'all' && endDate !== 'all') {
       try {
         const sDate = new Date(startDate);
         const eDate = new Date(endDate);
@@ -580,11 +504,9 @@ ${missingDaysCount > 0
       }
     }
 
-    const dateRangeLabel = entries.length === 1
-      ? entries[0]?.entry_date
-      : (startDate && endDate && startDate !== 'all'
-          ? `${startDate} to ${endDate}`
-          : `All entries (${entries[0]?.entry_date} to ${entries[entries.length - 1]?.entry_date})`);
+    const dateRangeLabel = startDate && endDate && startDate !== 'all'
+      ? `${startDate} to ${endDate}`
+      : `All entries (${entries[0]?.entry_date} to ${entries[entries.length - 1]?.entry_date})`;
 
     const systemPrompt = buildSystemPrompt(persona, displayName, question);
 
@@ -622,60 +544,38 @@ ${question}`;
       parts: [{ text: currentPrompt }],
     });
 
-    /* [TAG: DIRECT_GEMINI_15_FLASH_ROUTE_V1] */
-    // Point directly to verified gemini-1.5-flash to eliminate the 2.2s 404 delay
-    const modelCandidates = ['gemini-1.5-flash'];
+    const modelCandidates = ['gemini-flash-lite-latest', 'gemini-1.5-flash', 'gemini-3.6-flash'];
     let aiAnswer = '';
 
     if (geminiApiKey) {
       for (const model of modelCandidates) {
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
-            const res = await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                contents,
-                generationConfig: {
-                  temperature: 0.35,
-                  maxOutputTokens: 3000,
-                },
-              }),
-            });
-
-            if (res.ok) {
-              const data = await res.json();
-              const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-              if (text) {
-                aiAnswer = text;
-                break;
-              }
-            } else {
-              console.warn(`Model ${model} attempt ${attempt + 1} returned status:`, res.status);
-              if (res.status === 429) {
-                return jsonResponse({
-                  type: 'rate-limited',
-                  text: "Google AI rate limit reached (too many rapid requests). Please pause for 15-20 seconds before asking your next follow-up! 🌸",
-                  dateRange: { start: entries[0]?.entry_date || startDate || '', end: entries[entries.length - 1]?.entry_date || endDate || '' },
-                  entryCount: entries.length,
-                });
-              }
-              if (res.status === 503 && attempt === 0) {
-                await new Promise((resolve) => setTimeout(resolve, 800));
-                continue;
-              }
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents,
+              generationConfig: {
+                temperature: 0.35,
+                maxOutputTokens: 3000,
+              },
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            if (text) {
+              aiAnswer = text;
+              break;
             }
-          } catch (e) {
-            console.warn(`Error calling ${model} attempt ${attempt + 1}:`, e);
-            if (attempt === 0) {
-              await new Promise((resolve) => setTimeout(resolve, 500));
-              continue;
-            }
+          } else {
+            console.warn(`Model ${model} returned status:`, res.status);
           }
+        } catch (e) {
+          console.warn(`Error calling ${model}:`, e);
         }
-        if (aiAnswer) break;
       }
     }
 
