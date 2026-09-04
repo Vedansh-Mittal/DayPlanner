@@ -61,34 +61,30 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const settingsRef = useRef<UserSettings | null>(null);
 
-  // Save DEK in session storage for the current browser session (survives refreshes Cmd+R)
+  // Save DEK in local storage for the device/browser (persists across tab closes, browser restarts)
   const saveDekToDevice = async (key: CryptoKey, userId?: string) => {
     try {
       const raw = await crypto.subtle.exportKey('raw', key);
       const b64 = bufferToBase64(raw);
-      sessionStorage.setItem(DEVICE_DEK_KEY, b64);
-      sessionStorage.setItem(SESSION_UNLOCKED_KEY, 'true');
+      localStorage.setItem(DEVICE_DEK_KEY, b64);
+      localStorage.setItem(SESSION_UNLOCKED_KEY, 'true');
       if (userId) {
-        sessionStorage.setItem(`${DEVICE_DEK_KEY}_${userId}`, b64);
-      }
-      // Remove any lingering plaintext DEK from persistent localStorage
-      localStorage.removeItem(DEVICE_DEK_KEY);
-      if (userId) {
-        localStorage.removeItem(`${DEVICE_DEK_KEY}_${userId}`);
+        localStorage.setItem(`${DEVICE_DEK_KEY}_${userId}`, b64);
       }
     } catch (e) {
-      console.warn('Failed to save DEK in session storage:', e);
+      console.warn('Failed to save DEK in local storage:', e);
     }
   };
 
   const clearDeviceDek = (userId?: string) => {
+    localStorage.removeItem(DEVICE_DEK_KEY);
+    localStorage.removeItem(SESSION_UNLOCKED_KEY);
     sessionStorage.removeItem(DEVICE_DEK_KEY);
     sessionStorage.removeItem(SESSION_UNLOCKED_KEY);
-    localStorage.removeItem(DEVICE_DEK_KEY);
     setCachedPassphrase(null);
     if (userId) {
-      sessionStorage.removeItem(`${DEVICE_DEK_KEY}_${userId}`);
       localStorage.removeItem(`${DEVICE_DEK_KEY}_${userId}`);
+      sessionStorage.removeItem(`${DEVICE_DEK_KEY}_${userId}`);
     }
   };
 
@@ -120,13 +116,18 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (settings?.encryption_enabled && settings.wrapped_key_passphrase && settings.encryption_salt) {
         setIsEncryptionConfigured(true);
 
-        // Check if this session was already unlocked (survives page refresh Cmd+R / F5)
-        const isSessionUnlocked = sessionStorage.getItem(SESSION_UNLOCKED_KEY) === 'true';
+        // Check if this device/browser was unlocked
+        const isDeviceUnlocked =
+          localStorage.getItem(SESSION_UNLOCKED_KEY) === 'true' ||
+          sessionStorage.getItem(SESSION_UNLOCKED_KEY) === 'true';
+
         const cachedRaw =
+          localStorage.getItem(`${DEVICE_DEK_KEY}_${user.id}`) ||
+          localStorage.getItem(DEVICE_DEK_KEY) ||
           sessionStorage.getItem(`${DEVICE_DEK_KEY}_${user.id}`) ||
           sessionStorage.getItem(DEVICE_DEK_KEY);
 
-        if (isSessionUnlocked && cachedRaw) {
+        if (isDeviceUnlocked && cachedRaw) {
           try {
             const rawBytes = base64ToBuffer(cachedRaw);
             const importedDek = await crypto.subtle.importKey(
