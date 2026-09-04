@@ -511,14 +511,14 @@ ${missingDaysCount > 0
     const systemPrompt = buildSystemPrompt(persona, displayName, question);
 
     /* [TAG: CLEAN_HISTORY_TOKEN_OPTIMIZATION_V1] */
-    // Prepare multi-turn conversation contents for Gemini ensuring valid alternating user/model roles
-    const rawTurns: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+    // Prepare multi-turn conversation contents for Gemini
+    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
 
-    // Prior chat turns (last 6 turns)
+    // Prior chat turns
     if (Array.isArray(history) && history.length > 0) {
       for (const turn of history.slice(-6)) {
         if (turn.role && turn.text) {
-          rawTurns.push({
+          contents.push({
             role: turn.role === 'user' ? 'user' : 'model',
             parts: [{ text: turn.text }],
           });
@@ -539,78 +539,43 @@ ${formattedJournal}
 [USER QUESTION]
 ${question}`;
 
-    rawTurns.push({
+    contents.push({
       role: 'user',
       parts: [{ text: currentPrompt }],
     });
 
-    // Enforce strict alternating roles (user -> model -> user) required by Gemini API
-    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
-    for (const item of rawTurns) {
-      if (contents.length > 0 && contents[contents.length - 1].role === item.role) {
-        contents[contents.length - 1].parts[0].text += `\n\n${item.parts[0].text}`;
-      } else {
-        contents.push(item);
-      }
-    }
-
-    /* [TAG: UNBREAKABLE_MODEL_PIPELINE_V1] */
-    // Officially verified free-tier models in Google AI Studio ordered by speed, capability & quota resilience
-    const modelCandidates = [
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-2.5-flash-lite',
-      'gemini-1.5-flash',
-    ];
+    const modelCandidates = ['gemini-flash-lite-latest', 'gemini-1.5-flash', 'gemini-3.6-flash'];
     let aiAnswer = '';
 
     if (geminiApiKey) {
       for (const model of modelCandidates) {
-        // Attempt up to 2 times for transient 429 (rate-limit) or 503 (model capacity exhausted)
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
-            const res = await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                contents,
-                generationConfig: {
-                  temperature: 0.35,
-                  maxOutputTokens: 3000,
-                },
-              }),
-            });
-
-            if (res.ok) {
-              const data = await res.json();
-              const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-              if (text) {
-                aiAnswer = text;
-                break; // Succeeded, exit attempt loop
-              }
-            } else {
-              console.warn(`Model ${model} (attempt ${attempt + 1}) returned status: ${res.status}`);
-              // If rate-limited or temporarily exhausted, pause 800ms before attempt 2
-              if ((res.status === 429 || res.status === 503) && attempt === 0) {
-                await new Promise((resolve) => setTimeout(resolve, 800));
-                continue;
-              }
-              // For 404 or other errors, immediately switch to next model candidate
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents,
+              generationConfig: {
+                temperature: 0.35,
+                maxOutputTokens: 3000,
+              },
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            if (text) {
+              aiAnswer = text;
               break;
             }
-          } catch (e) {
-            console.warn(`Error calling ${model} (attempt ${attempt + 1}):`, e);
-            if (attempt === 0) {
-              await new Promise((resolve) => setTimeout(resolve, 500));
-              continue;
-            }
-            break;
+          } else {
+            console.warn(`Model ${model} returned status:`, res.status);
           }
+        } catch (e) {
+          console.warn(`Error calling ${model}:`, e);
         }
-
-        if (aiAnswer) break; // Succeeded, stop iterating model candidates
       }
     }
 
