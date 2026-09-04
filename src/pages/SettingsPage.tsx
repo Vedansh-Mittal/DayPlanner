@@ -10,9 +10,10 @@ import {
   Settings as SettingsIcon, User, Globe, Clock, Droplets, Bell,
   Palette, LogOut, Trash2, Loader2, Check, Sun, Moon, Monitor,
   Download, Upload, FileText, Sparkles, Compass, Target, Lightbulb, Smile, BookOpen, Briefcase,
-  Shield, Smartphone, Share2
+  Shield, Smartphone, Share2, Lock, Eye, EyeOff, AlertCircle, X, Package, ShieldCheck
 } from 'lucide-react';
 import { useCrypto } from '../contexts/CryptoContext';
+import { encryptBackupPayload, decryptBackupPayload } from '../lib/crypto';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import { subscribeToPush, unsubscribeFromPush } from '../lib/push';
 import {
@@ -80,9 +81,35 @@ export const SettingsPage: React.FC = () => {
   const [restoring, setRestoring] = useState(false);
   const [restoreSuccess, setRestoreSuccess] = useState(false);
 
-  const handleExportJSON = async () => {
+  // Export Modal state (3 options: plain, encrypted, both)
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'plain' | 'encrypted' | 'both'>('both');
+  const [exportPassword, setExportPassword] = useState('');
+  const [showExportPassword, setShowExportPassword] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  // Encrypted Import Password Modal state
+  const [pendingEncryptedBackup, setPendingEncryptedBackup] = useState<any | null>(null);
+  const [importPassword, setImportPassword] = useState('');
+  const [showImportPassword, setShowImportPassword] = useState(false);
+  const [importPasswordError, setImportPasswordError] = useState<string | null>(null);
+  const [importingFromEncrypted, setImportingFromEncrypted] = useState(false);
+
+  const handleExportJSON = () => {
+    setShowExportModal(true);
+    setExportError(null);
+    setExportPassword('');
+  };
+
+  const executeExport = async () => {
     if (!user) return;
+    if ((exportFormat === 'encrypted' || exportFormat === 'both') && exportPassword.length < 8) {
+      setExportError('Password must be at least 8 characters long.');
+      return;
+    }
+
     setBackingUp(true);
+    setExportError(null);
     try {
       const { data: entries } = await supabase
         .from('daily_entries')
@@ -113,105 +140,158 @@ export const SettingsPage: React.FC = () => {
         entries: decryptedEntries,
       };
 
-      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
-        JSON.stringify(backupData, null, 2)
-      )}`;
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute('href', jsonString);
-      downloadAnchor.setAttribute('download', `daylight_planner_backup_${new Date().toISOString().split('T')[0]}.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
-    } catch (err) {
+      const dateStr = new Date().toISOString().split('T')[0];
+
+      const triggerDownload = (content: string, filename: string) => {
+        const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      };
+
+      if (exportFormat === 'plain' || exportFormat === 'both') {
+        triggerDownload(
+          JSON.stringify(backupData, null, 2),
+          `mewwmory_backup_${dateStr}_plaintext.json`
+        );
+      }
+
+      if (exportFormat === 'encrypted' || exportFormat === 'both') {
+        const encryptedPayload = await encryptBackupPayload(backupData, exportPassword);
+        triggerDownload(
+          JSON.stringify(encryptedPayload, null, 2),
+          `mewwmory_backup_${dateStr}_encrypted.json`
+        );
+      }
+
+      setShowExportModal(false);
+      setExportPassword('');
+    } catch (err: any) {
       console.error('Export error:', err);
+      setExportError(err?.message || 'Export failed. Please try again.');
+    } finally {
+      setBackingUp(false);
     }
-    setBackingUp(false);
+  };
+
+  const performRestore = async (backup: any) => {
+    if (!user) return;
+    if (!backup || !Array.isArray(backup.entries)) {
+      throw new Error('Invalid backup file structure. No entries found.');
+    }
+
+    setRestoring(true);
+    setRestoreSuccess(false);
+
+    try {
+      for (const entry of backup.entries) {
+        const entryId = entry.id;
+
+        // 1. Upsert daily entry row (remove nested arrays first)
+        const { priorities, action_steps, meals, wind_down_items, medications, ...entryRow } = entry;
+        entryRow.user_id = user.id;
+
+        const encryptedRow = await encryptDailyEntry(entryRow);
+        const { error: entryErr } = await supabase.from('daily_entries').upsert(encryptedRow);
+        if (entryErr) throw entryErr;
+
+        // 2. Restore child relation rows
+        if (Array.isArray(priorities) && priorities.length > 0) {
+          const encP = await encryptPrioritiesList(priorities);
+          const { error: err } = await supabase.from('priorities').upsert(
+            encP.map((p: any) => ({ ...p, daily_entry_id: entryId, user_id: user.id }))
+          );
+          if (err) throw err;
+        }
+        if (Array.isArray(action_steps) && action_steps.length > 0) {
+          const encA = await encryptActionStepsList(action_steps);
+          const { error: err } = await supabase.from('action_steps').upsert(
+            encA.map((a: any) => ({ ...a, daily_entry_id: entryId, user_id: user.id }))
+          );
+          if (err) throw err;
+        }
+        if (Array.isArray(meals) && meals.length > 0) {
+          const encM = await encryptMealsList(meals);
+          const { error: err } = await supabase.from('meals').upsert(
+            encM.map((m: any) => ({ ...m, daily_entry_id: entryId, user_id: user.id }))
+          );
+          if (err) throw err;
+        }
+        if (Array.isArray(wind_down_items) && wind_down_items.length > 0) {
+          const { error: err } = await supabase.from('wind_down_items').upsert(
+            wind_down_items.map((w: any) => ({ ...w, daily_entry_id: entryId, user_id: user.id }))
+          );
+          if (err) throw err;
+        }
+        if (Array.isArray(medications) && medications.length > 0) {
+          const encMeds = await encryptMedicationsList(medications);
+          const { error: err } = await supabase.from('medications').upsert(
+            encMeds.map((med: any) => ({ ...med, daily_entry_id: entryId, user_id: user.id }))
+          );
+          if (err) throw err;
+        }
+      }
+
+      setRestoreSuccess(true);
+      setTimeout(() => setRestoreSuccess(false), 4000);
+      alert('Backup restored successfully!');
+    } finally {
+      setRestoring(false);
+    }
   };
 
   const handleImportJSON = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    setRestoring(true);
-    setRestoreSuccess(false);
-
     try {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          const backup = JSON.parse(event.target?.result as string);
-          if (!backup || !Array.isArray(backup.entries)) {
-            alert('Invalid backup file structure.');
-            setRestoring(false);
-            return;
-          }
+      const text = await file.text();
+      let parsed: any;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        alert('Invalid JSON file. Please check the file format.');
+        if (e.target) e.target.value = '';
+        return;
+      }
 
-          // Restore each entry and child rows (encrypting if encryption is active)
-          for (const entry of backup.entries) {
-            const entryId = entry.id;
-
-            // 1. Upsert daily entry row (remove nested arrays first)
-            const { priorities, action_steps, meals, wind_down_items, medications, ...entryRow } = entry;
-            entryRow.user_id = user.id;
-
-            const encryptedRow = await encryptDailyEntry(entryRow);
-            const { error: entryErr } = await supabase.from('daily_entries').upsert(encryptedRow);
-            if (entryErr) throw entryErr;
-
-            // 2. Restore child relation rows
-            if (Array.isArray(priorities) && priorities.length > 0) {
-              const encP = await encryptPrioritiesList(priorities);
-              const { error: err } = await supabase.from('priorities').upsert(
-                encP.map((p: any) => ({ ...p, daily_entry_id: entryId, user_id: user.id }))
-              );
-              if (err) throw err;
-            }
-            if (Array.isArray(action_steps) && action_steps.length > 0) {
-              const encA = await encryptActionStepsList(action_steps);
-              const { error: err } = await supabase.from('action_steps').upsert(
-                encA.map((a: any) => ({ ...a, daily_entry_id: entryId, user_id: user.id }))
-              );
-              if (err) throw err;
-            }
-            if (Array.isArray(meals) && meals.length > 0) {
-              const encM = await encryptMealsList(meals);
-              const { error: err } = await supabase.from('meals').upsert(
-                encM.map((m: any) => ({ ...m, daily_entry_id: entryId, user_id: user.id }))
-              );
-              if (err) throw err;
-            }
-            if (Array.isArray(wind_down_items) && wind_down_items.length > 0) {
-              const { error: err } = await supabase.from('wind_down_items').upsert(
-                wind_down_items.map((w: any) => ({ ...w, daily_entry_id: entryId, user_id: user.id }))
-              );
-              if (err) throw err;
-            }
-            if (Array.isArray(medications) && medications.length > 0) {
-              const encMeds = await encryptMedicationsList(medications);
-              const { error: err } = await supabase.from('medications').upsert(
-                encMeds.map((med: any) => ({ ...med, daily_entry_id: entryId, user_id: user.id }))
-              );
-              if (err) throw err;
-            }
-          }
-
-          setRestoreSuccess(true);
-          setTimeout(() => setRestoreSuccess(false), 3000);
-          alert('Backup restored successfully!');
-        } catch (err) {
-          console.error(err);
-          alert('Error parsing or saving backup data.');
-        } finally {
-          setRestoring(false);
-          // Clear file input value to allow selecting same file again if needed
-          if (e.target) e.target.value = '';
-        }
-      };
-      reader.readAsText(file);
-    } catch (err) {
-      console.error(err);
-      setRestoring(false);
+      // Check if this is an encrypted backup container
+      if (parsed.daylight_backup_encrypted || parsed.format === 'daylight-encrypted-backup-v1') {
+        setPendingEncryptedBackup(parsed);
+        setImportPassword('');
+        setImportPasswordError(null);
+      } else {
+        // Plain text backup: restore directly with no password
+        await performRestore(parsed);
+      }
+    } catch (err: any) {
+      console.error('Import error:', err);
+      alert(err?.message || 'Error parsing or restoring backup data.');
+    } finally {
       if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleUnlockAndRestoreEncrypted = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pendingEncryptedBackup || !importPassword.trim()) return;
+
+    setImportingFromEncrypted(true);
+    setImportPasswordError(null);
+    try {
+      const decryptedData = await decryptBackupPayload(pendingEncryptedBackup, importPassword);
+      await performRestore(decryptedData);
+      setPendingEncryptedBackup(null);
+      setImportPassword('');
+    } catch (err: any) {
+      setImportPasswordError(err?.message || 'Incorrect password. Could not decrypt backup file.');
+    } finally {
+      setImportingFromEncrypted(false);
     }
   };
 
@@ -1074,6 +1154,291 @@ export const SettingsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* 1. Export Options Modal (Plain, Encrypted, Both) */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-lg bg-card-bg dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-5">
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowExportModal(false);
+                setExportError(null);
+                setExportPassword('');
+              }}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface dark:hover:bg-dark-surface transition-colors"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center space-x-3 pr-8">
+              <div className="w-10 h-10 rounded-xl bg-lavender/10 text-lavender-dark dark:text-lavender flex items-center justify-center font-bold shrink-0">
+                <Download className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-text-primary dark:text-dark-text">
+                  Export Journal Backup
+                </h3>
+                <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                  Choose your preferred backup format
+                </p>
+              </div>
+            </div>
+
+            {/* 3 Options */}
+            <div className="space-y-2.5">
+              {/* Option 1: Plain Text */}
+              <button
+                type="button"
+                onClick={() => setExportFormat('plain')}
+                className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-start justify-between gap-3 ${
+                  exportFormat === 'plain'
+                    ? 'border-lavender bg-lavender/5 dark:bg-lavender/10'
+                    : 'border-border dark:border-dark-border hover:border-lavender/40'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <FileText className={`w-5 h-5 mt-0.5 shrink-0 ${exportFormat === 'plain' ? 'text-lavender' : 'text-text-muted'}`} />
+                  <div>
+                    <div className="text-sm font-bold text-text-primary dark:text-dark-text">
+                      Plain Text JSON
+                    </div>
+                    <div className="text-xs text-text-secondary dark:text-dark-text-secondary mt-0.5">
+                      Human-readable in any text editor. Does not require a password to restore.
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-surface-muted dark:bg-dark-surface-muted text-text-muted shrink-0">
+                  Open Format
+                </span>
+              </button>
+
+              {/* Option 2: Encrypted */}
+              <button
+                type="button"
+                onClick={() => setExportFormat('encrypted')}
+                className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-start justify-between gap-3 ${
+                  exportFormat === 'encrypted'
+                    ? 'border-amber-500 bg-amber-500/5 dark:bg-amber-500/10'
+                    : 'border-border dark:border-dark-border hover:border-amber-500/40'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <Lock className={`w-5 h-5 mt-0.5 shrink-0 ${exportFormat === 'encrypted' ? 'text-amber-500' : 'text-text-muted'}`} />
+                  <div>
+                    <div className="text-sm font-bold text-text-primary dark:text-dark-text">
+                      Encrypted JSON
+                    </div>
+                    <div className="text-xs text-text-secondary dark:text-dark-text-secondary mt-0.5">
+                      Scrambled with AES-256. Strictly requires your password to open or restore.
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+                  Max Security
+                </span>
+              </button>
+
+              {/* Option 3: Both */}
+              <button
+                type="button"
+                onClick={() => setExportFormat('both')}
+                className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-start justify-between gap-3 ${
+                  exportFormat === 'both'
+                    ? 'border-emerald-500 bg-emerald-500/5 dark:bg-emerald-500/10'
+                    : 'border-border dark:border-dark-border hover:border-emerald-500/40'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <Package className={`w-5 h-5 mt-0.5 shrink-0 ${exportFormat === 'both' ? 'text-emerald-500' : 'text-text-muted'}`} />
+                  <div>
+                    <div className="text-sm font-bold text-text-primary dark:text-dark-text">
+                      Both Formats (Plain + Encrypted)
+                    </div>
+                    <div className="text-xs text-text-secondary dark:text-dark-text-secondary mt-0.5">
+                      Downloads both files so you have an unencrypted copy and a secured vault copy.
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                  Recommended
+                </span>
+              </button>
+            </div>
+
+            {/* Password input for Encrypted / Both options */}
+            {(exportFormat === 'encrypted' || exportFormat === 'both') && (
+              <div className="p-3.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border/60 dark:border-dark-border/60 space-y-2">
+                <label className="block text-xs font-bold text-text-primary dark:text-dark-text">
+                  Set password for the encrypted backup:
+                </label>
+                <div className="relative">
+                  <input
+                    type={showExportPassword ? 'text' : 'password'}
+                    value={exportPassword}
+                    onChange={(e) => setExportPassword(e.target.value)}
+                    placeholder="Enter backup password (min. 8 characters)"
+                    className="w-full px-3.5 py-2 pr-10 rounded-lg bg-surface dark:bg-dark-surface border border-border dark:border-dark-border text-xs text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowExportPassword(!showExportPassword)}
+                    className="absolute right-3 top-2 text-text-muted hover:text-text-primary"
+                  >
+                    {showExportPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-text-muted dark:text-dark-text-muted">
+                  ⚠️ Anyone restoring the encrypted file will strictly need this password.
+                </p>
+              </div>
+            )}
+
+            {/* Error Banner */}
+            {exportError && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{exportError}</span>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExportModal(false);
+                  setExportError(null);
+                  setExportPassword('');
+                }}
+                className="btn-ghost flex-1 py-2.5 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeExport}
+                disabled={backingUp || ((exportFormat === 'encrypted' || exportFormat === 'both') && !exportPassword.trim())}
+                className="btn-primary flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+              >
+                {backingUp ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Preparing Backup...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>Download Backup</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Password Prompt Modal for Encrypted Backup Restore */}
+      {pendingEncryptedBackup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-md bg-card-bg dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-4">
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => {
+                setPendingEncryptedBackup(null);
+                setImportPassword('');
+                setImportPasswordError(null);
+              }}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface dark:hover:bg-dark-surface transition-colors"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center space-x-3 pr-8">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold shrink-0">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-text-primary dark:text-dark-text">
+                  Unlock Encrypted Backup
+                </h3>
+                <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                  Protected with AES-256 Encryption
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-text-secondary dark:text-dark-text-secondary leading-relaxed">
+              This backup file is encrypted. Enter the password that was set when this backup was created to decrypt and restore your journal into this account.
+            </p>
+
+            <form onSubmit={handleUnlockAndRestoreEncrypted} className="space-y-4">
+              <div className="relative">
+                <input
+                  type={showImportPassword ? 'text' : 'password'}
+                  value={importPassword}
+                  onChange={(e) => setImportPassword(e.target.value)}
+                  placeholder="Enter backup password"
+                  autoFocus
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-xs text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowImportPassword(!showImportPassword)}
+                  className="absolute right-3 top-2.5 text-text-muted hover:text-text-primary"
+                >
+                  {showImportPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* Error */}
+              {importPasswordError && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{importPasswordError}</span>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingEncryptedBackup(null);
+                    setImportPassword('');
+                    setImportPasswordError(null);
+                  }}
+                  className="btn-ghost flex-1 py-2.5 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={importingFromEncrypted || !importPassword.trim()}
+                  className="btn-primary flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                >
+                  {importingFromEncrypted ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Decrypting & Restoring...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Decrypt & Restore</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

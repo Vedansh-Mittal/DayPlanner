@@ -443,3 +443,67 @@ export async function decryptMedications(meds: any[], dek: CryptoKey | null): Pr
     }))
   );
 }
+
+/* ===== Encrypted Backup File Helpers ===== */
+
+export interface EncryptedBackupContainer {
+  daylight_backup_encrypted: true;
+  format: 'daylight-encrypted-backup-v1';
+  created_at: string;
+  salt: string;
+  iv: string;
+  ciphertext: string;
+}
+
+export async function encryptBackupPayload(
+  payloadData: any,
+  passphrase: string
+): Promise<EncryptedBackupContainer> {
+  const jsonString = JSON.stringify(payloadData);
+  const salt = generateSalt();
+  const kek = await deriveKekFromSecret(passphrase, salt);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder();
+
+  const ciphertextBuffer = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    kek,
+    enc.encode(jsonString)
+  );
+
+  return {
+    daylight_backup_encrypted: true,
+    format: 'daylight-encrypted-backup-v1',
+    created_at: new Date().toISOString(),
+    salt,
+    iv: bufferToBase64(iv),
+    ciphertext: bufferToBase64(ciphertextBuffer),
+  };
+}
+
+export async function decryptBackupPayload(
+  container: EncryptedBackupContainer,
+  passphrase: string
+): Promise<any> {
+  if (!container.salt || !container.iv || !container.ciphertext) {
+    throw new Error('Invalid encrypted backup file format.');
+  }
+
+  const kek = await deriveKekFromSecret(passphrase, container.salt);
+  const iv = base64ToBuffer(container.iv);
+  const ciphertext = base64ToBuffer(container.ciphertext);
+
+  try {
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      kek,
+      ciphertext
+    );
+
+    const jsonString = new TextDecoder().decode(decryptedBuffer);
+    return JSON.parse(jsonString);
+  } catch {
+    throw new Error('Incorrect password. Could not decrypt backup file.');
+  }
+}
+
