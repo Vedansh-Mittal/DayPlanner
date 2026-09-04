@@ -55,12 +55,13 @@ function renderInlineTokens(text: string) {
         </strong>
       );
     }
+    /* [TAG: QUOTE_TYPOGRAPHY_READABILITY_V1] */
     if ((tok.startsWith('"') && tok.endsWith('"')) || (tok.startsWith('“') && tok.endsWith('”'))) {
       const quote = tok.slice(1, -1);
       return (
         <span
           key={i}
-          className="italic font-serif text-lavender-dark dark:text-lavender-light bg-lavender/15 dark:bg-lavender/25 px-1.5 py-0.5 rounded text-[13px] mx-0.5 inline-block border border-lavender/20 dark:border-lavender/30 font-semibold"
+          className="italic text-text-primary dark:text-dark-text bg-lavender/10 dark:bg-lavender/20 px-1 py-0.5 rounded mx-0.5"
         >
           “{quote}”
         </span>
@@ -210,7 +211,7 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
                         <span>{card.title}</span>
                       </div>
                     )}
-                    <p className="text-xs text-text-secondary dark:text-dark-text-secondary leading-relaxed">
+                    <p className="text-sm text-text-primary dark:text-dark-text leading-relaxed">
                       {renderInlineTokens(card.body)}
                     </p>
                   </div>
@@ -231,7 +232,7 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
                 <Target size={14} className="text-emerald-500 dark:text-emerald-400" />
                 <span>One Small Next Step</span>
               </div>
-              <div className="text-xs text-emerald-950 dark:text-emerald-100 font-medium leading-relaxed space-y-1">
+              <div className="text-sm text-emerald-950 dark:text-emerald-100 font-normal leading-relaxed space-y-1">
                 {sec.items.map((it, itIdx) => (
                   <p key={itIdx}>{renderInlineTokens(it)}</p>
                 ))}
@@ -251,7 +252,7 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
                 <Lightbulb size={14} className="text-amber-500 dark:text-amber-400" />
                 <span>✨ Tiny Spark</span>
               </div>
-              <div className="text-xs text-amber-950 dark:text-amber-100 font-medium leading-relaxed space-y-1">
+              <div className="text-sm text-amber-950 dark:text-amber-100 font-normal leading-relaxed space-y-1">
                 {/* [AI-ENHANCEMENT: SPARK-PARSER-FIX] */}
                 {sec.items.length > 0 ? (
                   sec.items.map((it, itIdx) => (
@@ -286,7 +287,7 @@ const FormattedInsightText: React.FC<{ text: string }> = ({ text }) => {
             )}
             <div className="pl-3 border-l-2 border-lavender/30 dark:border-lavender/20 space-y-1.5">
               {sec.items.map((it, itIdx) => (
-                <p key={itIdx} className="text-xs text-text-secondary dark:text-dark-text-secondary leading-relaxed">
+                <p key={itIdx} className="text-sm text-text-primary dark:text-dark-text leading-relaxed">
                   {renderInlineTokens(it)}
                 </p>
               ))}
