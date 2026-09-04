@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { to: '/app', label: 'Today', icon: Sun, end: true },
   { to: '/app/history', label: 'History', icon: Calendar, end: false },
   { to: '/app/insights', label: 'Insights', icon: Sparkles, end: false },
-  { to: '/app/personalisation', label: 'Persona', icon: Compass, end: false },
+  { to: '/app/personalisation', label: 'Personalise', icon: Compass, end: false },
   { to: '/app/security', label: 'Security', icon: Shield, end: false },
   { to: '/app/settings', label: 'Settings', icon: Settings, end: false },
 ];

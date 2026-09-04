@@ -8,6 +8,7 @@ import { AuthGuard } from './components/AuthGuard';
 import { AppLayout } from './components/AppLayout';
 import { CryptoProvider } from './contexts/CryptoContext';
 import { EncryptionUnlockModal } from './components/EncryptionUnlockModal';
+import { SecurityAnnouncementModal } from './components/SecurityAnnouncementModal';
 
 // Lazy-loaded pages for minimal initial bundle size & ultra-fast loading (§1)
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -42,6 +43,7 @@ const App: React.FC = () => {
     <BrowserRouter>
       <CryptoProvider>
         <EncryptionUnlockModal />
+        <SecurityAnnouncementModal />
         <Suspense fallback={<PageLoadingFallback />}>
           <Routes>
             {/* Public routes */}
