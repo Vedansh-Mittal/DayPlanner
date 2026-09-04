@@ -1,5 +1,12 @@
 import { supabase } from './supabase';
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import {
+  decryptEntryData,
+  decryptPriorities,
+  decryptActionSteps,
+  decryptMeals,
+  decryptMedications,
+} from './crypto';
 
 /* ===== Types ===== */
 
@@ -22,10 +29,11 @@ export interface GroundedInsightResponse {
 /* ===== Main query handler with Multi-Turn Conversational History ===== */
 
 export async function queryInsights(
-  _userId: string,
+  userId: string,
   question: string,
   dateRange?: { start: string; end: string } | null,
   history: Array<{ role: 'user' | 'assistant'; text: string }> = [],
+  dek?: CryptoKey | null,
 ): Promise<GroundedInsightResponse> {
   // If no date range provided, check if the question mentions a specific date
   let range = dateRange;
@@ -39,12 +47,50 @@ export async function queryInsights(
       text: h.text,
     }));
 
+    // Fetch and decrypt entries locally in browser RAM
+    let query = supabase
+      .from('daily_entries')
+      .select('*, priorities(*), action_steps(*), medications(*), meals(*), wind_down_items(*)')
+      .eq('user_id', userId);
+
+    if (range?.start && range.start !== 'all') {
+      query = query.gte('entry_date', range.start);
+    }
+    if (range?.end && range.end !== 'all') {
+      query = query.lte('entry_date', range.end);
+    }
+
+    query = query.order('entry_date', { ascending: true });
+
+    const { data: rawEntries } = await query;
+    let decryptedEntries: any[] = [];
+
+    if (rawEntries && rawEntries.length > 0) {
+      decryptedEntries = await Promise.all(
+        rawEntries.map(async (entry) => {
+          const dec = await decryptEntryData(entry, dek || null);
+          const decP = await decryptPriorities(entry.priorities || [], dek || null);
+          const decA = await decryptActionSteps(entry.action_steps || [], dek || null);
+          const decM = await decryptMeals(entry.meals || [], dek || null);
+          const decMeds = await decryptMedications(entry.medications || [], dek || null);
+          return {
+            ...dec,
+            priorities: decP,
+            action_steps: decA,
+            meals: decM,
+            medications: decMeds,
+          };
+        })
+      );
+    }
+
     const { data, error } = await supabase.functions.invoke('generate-insight', {
       body: {
         question,
         startDate: range?.start || 'all',
         endDate: range?.end || 'all',
         history: formattedHistory,
+        entries: decryptedEntries,
       },
     });
 

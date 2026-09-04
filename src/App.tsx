@@ -6,6 +6,8 @@ import { Sun } from 'lucide-react';
 // Components
 import { AuthGuard } from './components/AuthGuard';
 import { AppLayout } from './components/AppLayout';
+import { CryptoProvider } from './contexts/CryptoContext';
+import { EncryptionUnlockModal } from './components/EncryptionUnlockModal';
 
 // Lazy-loaded pages for minimal initial bundle size & ultra-fast loading (§1)
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -36,30 +38,33 @@ const App: React.FC = () => {
 
   return (
     <BrowserRouter>
-      <Suspense fallback={<PageLoadingFallback />}>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <CryptoProvider>
+        <EncryptionUnlockModal />
+        <Suspense fallback={<PageLoadingFallback />}>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-          {/* Protected routes */}
-          <Route path="/onboarding" element={
-            <AuthGuard><OnboardingPage /></AuthGuard>
-          } />
+            {/* Protected routes */}
+            <Route path="/onboarding" element={
+              <AuthGuard><OnboardingPage /></AuthGuard>
+            } />
 
-          <Route path="/app" element={
-            <AuthGuard><AppLayout /></AuthGuard>
-          }>
-            <Route index element={<PlannerPage />} />
-            <Route path="history" element={<HistoryPage />} />
-            <Route path="insights" element={<InsightsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
+            <Route path="/app" element={
+              <AuthGuard><AppLayout /></AuthGuard>
+            }>
+              <Route index element={<PlannerPage />} />
+              <Route path="history" element={<HistoryPage />} />
+              <Route path="insights" element={<InsightsPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
 
-          {/* Default redirect */}
-          <Route path="*" element={<Navigate to="/app" replace />} />
-        </Routes>
-      </Suspense>
+            {/* Default redirect */}
+            <Route path="*" element={<Navigate to="/app" replace />} />
+          </Routes>
+        </Suspense>
+      </CryptoProvider>
     </BrowserRouter>
   );
 };

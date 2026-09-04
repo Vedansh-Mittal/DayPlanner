@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth-store';
+import { useCrypto } from '../contexts/CryptoContext';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
   getDay, addMonths, subMonths, parse, isToday,
@@ -16,6 +17,13 @@ import {
 export const HistoryPage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
+  const {
+    decryptDailyEntry,
+    decryptPrioritiesList,
+    decryptActionStepsList,
+    decryptMealsList,
+  } = useCrypto();
+
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarData, setCalendarData] = useState<Record<string, Partial<DailyEntryFull>>>({});
   const [loadingCal, setLoadingCal] = useState(true);
@@ -41,11 +49,25 @@ export const HistoryPage: React.FC = () => {
       .lte('entry_date', monthEnd);
 
     const map: Record<string, Partial<DailyEntryFull>> = {};
-    ((data as Partial<DailyEntryFull>[]) || []).forEach((e) => {
-      if (e.entry_date) {
-        map[e.entry_date] = e;
-      }
-    });
+    const rawList = (data as Partial<DailyEntryFull>[]) || [];
+
+    // Decrypt all entries in RAM for the calendar view
+    await Promise.all(
+      rawList.map(async (e) => {
+        if (e.entry_date) {
+          const decEntry = await decryptDailyEntry(e);
+          const decP = await decryptPrioritiesList(e.priorities || []);
+          const decA = await decryptActionStepsList(e.action_steps || []);
+          const decM = await decryptMealsList(e.meals || []);
+          map[e.entry_date] = {
+            ...decEntry,
+            priorities: decP,
+            action_steps: decA,
+            meals: decM,
+          };
+        }
+      })
+    );
 
     // Merge offline cache so instant edits on PlannerPage are immediately visible in History calendar!
     try {
@@ -67,7 +89,7 @@ export const HistoryPage: React.FC = () => {
 
     setCalendarData(map);
     setLoadingCal(false);
-  }, [user, currentMonth]);
+  }, [user, currentMonth, decryptDailyEntry, decryptPrioritiesList, decryptActionStepsList, decryptMealsList]);
 
   useEffect(() => {
     loadCalendar();
@@ -84,23 +106,100 @@ export const HistoryPage: React.FC = () => {
       (e.night_completed || isNightComplete(e, e.meals || [], e.wind_down_items || []))
   ).length;
 
-  // Search
+  // Zero-Knowledge Client-Side Memory Search
   const handleSearch = async () => {
-    if (!searchQuery.trim() || !user) return;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q || !user) return;
     setSearching(true);
     setHasSearched(true);
 
-    const { data, error } = await supabase.rpc('search_entries', {
-      search_query: searchQuery.trim(),
-    });
+    try {
+      // Fetch user's entries across time
+      const { data, error } = await supabase
+        .from('daily_entries')
+        .select('*, priorities(*), action_steps(*), meals(*), medications(*)')
+        .eq('user_id', user.id)
+        .order('entry_date', { ascending: false });
 
-    if (error) {
-      console.error('Search error:', error);
+      if (error) {
+        console.error('Search fetch error:', error);
+        setSearchResults([]);
+        setSearching(false);
+        return;
+      }
+
+      const results: SearchResult[] = [];
+      const rawList = data || [];
+
+      // Decrypt and scan in browser memory
+      for (const raw of rawList) {
+        const entry = await decryptDailyEntry(raw);
+        const priorities = await decryptPrioritiesList(raw.priorities || []);
+        const actions = await decryptActionStepsList(raw.action_steps || []);
+        const meals = await decryptMealsList(raw.meals || []);
+
+        const checkMatch = (text: string | null | undefined, sourceLabel: string) => {
+          if (!text || typeof text !== 'string') return false;
+          if (text.toLowerCase().includes(q)) {
+            results.push({
+              entry_id: entry.id,
+              entry_date: entry.entry_date,
+              daily_note: entry.daily_note,
+              morning_mood: entry.morning_mood,
+              night_mood: entry.night_mood,
+              match_source: sourceLabel,
+              matched_text: text,
+            } as any);
+            return true;
+          }
+          return false;
+        };
+
+        // Check fields in order of user relevance
+        if (checkMatch(entry.daily_note, 'Daily Note')) continue;
+        if (checkMatch(entry.morning_brain_dump, 'Morning Brain Dump')) continue;
+        if (checkMatch(entry.night_brain_dump, 'Night Brain Dump')) continue;
+        if (checkMatch(entry.morning_why, 'Morning Intention')) continue;
+        if (checkMatch(entry.night_win, 'Daily Win')) continue;
+        if (checkMatch(entry.night_gratitude_1, 'Gratitude')) continue;
+        if (checkMatch(entry.night_gratitude_2, 'Gratitude')) continue;
+        if (checkMatch(entry.night_gratitude_3, 'Gratitude')) continue;
+        if (checkMatch(entry.night_went_well, 'Went Well')) continue;
+        if (checkMatch(entry.night_improve, 'To Improve')) continue;
+
+        // Check priorities
+        let matchedP = false;
+        for (const p of priorities) {
+          if (checkMatch(p.text, 'Priority')) {
+            matchedP = true;
+            break;
+          }
+        }
+        if (matchedP) continue;
+
+        // Check actions
+        let matchedA = false;
+        for (const a of actions) {
+          if (checkMatch(a.text, 'Action Step')) {
+            matchedA = true;
+            break;
+          }
+        }
+        if (matchedA) continue;
+
+        // Check meals
+        for (const m of meals) {
+          if (checkMatch(m.notes, `${m.meal_type || 'Meal'} Note`)) break;
+        }
+      }
+
+      setSearchResults(results);
+    } catch (err) {
+      console.error('Client search error:', err);
       setSearchResults([]);
-    } else {
-      setSearchResults(data || []);
+    } finally {
+      setSearching(false);
     }
-    setSearching(false);
   };
 
   // Calendar rendering

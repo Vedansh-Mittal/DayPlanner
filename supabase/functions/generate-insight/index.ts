@@ -373,7 +373,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { question, startDate, endDate, history = [] } = body;
+    const { question, startDate, endDate, history = [], entries: clientEntries } = body;
 
     if (!question || typeof question !== 'string') {
       return jsonResponse({ error: 'question is required' }, 400);
@@ -406,28 +406,35 @@ Deno.serve(async (req) => {
     const persona = personalisationRes.data || {};
     const displayName = settingsRes.data?.display_name || null;
 
-    // Query user's planner data
-    let query = supabase
-      .from('daily_entries')
-      .select('*, priorities(*), action_steps(*), medications(*), meals(*), wind_down_items(*)')
-      .eq('user_id', user.id);
+    let entries: any[] = [];
 
-    if (startDate && startDate !== 'all') {
-      query = query.gte('entry_date', startDate);
+    // If client provided pre-decrypted entries (Zero-Knowledge E2EE mode), use them directly!
+    if (Array.isArray(clientEntries) && clientEntries.length > 0) {
+      entries = clientEntries.filter(hasMeaningfulData);
+    } else {
+      // Fallback: Query database directly
+      let query = supabase
+        .from('daily_entries')
+        .select('*, priorities(*), action_steps(*), medications(*), meals(*), wind_down_items(*)')
+        .eq('user_id', user.id);
+
+      if (startDate && startDate !== 'all') {
+        query = query.gte('entry_date', startDate);
+      }
+      if (endDate && endDate !== 'all') {
+        query = query.lte('entry_date', endDate);
+      }
+
+      query = query.order('entry_date', { ascending: true });
+
+      const { data: rawEntries, error: dbError } = await query;
+      if (dbError) {
+        console.error('Database fetch error:', dbError.message);
+        return jsonResponse({ error: 'Failed to fetch planner entries' }, 500);
+      }
+
+      entries = (rawEntries || []).filter(hasMeaningfulData);
     }
-    if (endDate && endDate !== 'all') {
-      query = query.lte('entry_date', endDate);
-    }
-
-    query = query.order('entry_date', { ascending: true });
-
-    const { data: rawEntries, error: dbError } = await query;
-    if (dbError) {
-      console.error('Database fetch error:', dbError.message);
-      return jsonResponse({ error: 'Failed to fetch planner entries' }, 500);
-    }
-
-    let entries = (rawEntries || []).filter(hasMeaningfulData);
 
     // Graceful Fallback: If a specific date (e.g. today) yielded 0 entries, fetch recent entries so planning/advice succeeds
     if (entries.length === 0 && startDate && startDate !== 'all') {

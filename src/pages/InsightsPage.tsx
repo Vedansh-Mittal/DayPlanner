@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuthStore } from '../stores/auth-store';
+import { useCrypto } from '../contexts/CryptoContext';
 import {
   queryInsights,
   SUGGESTED_QUESTIONS,
@@ -443,6 +444,7 @@ const CalendarRangePicker: React.FC<{
 /* ── Main Insights Page Component ──────────────────────────── */
 export const InsightsPage: React.FC = () => {
   const user = useAuthStore((s) => s.user);
+  const { dek } = useCrypto();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputQuestion, setInputQuestion] = useState('');
   const [loading, setLoading] = useState(false);
@@ -490,7 +492,7 @@ export const InsightsPage: React.FC = () => {
       }));
 
       try {
-        const res = await queryInsights(user.id, textToSend.trim(), currentRange, historyForApi);
+        const res = await queryInsights(user.id, textToSend.trim(), currentRange, historyForApi, dek);
 
         const aiMsg: ChatMessage = {
           id: `ai-${Date.now()}`,

@@ -3,6 +3,7 @@ dist
 .env
 .env.local
 *.local
+*.tsbuildinfo
 
 # Research & Academic Paper Artifacts
 *.docx

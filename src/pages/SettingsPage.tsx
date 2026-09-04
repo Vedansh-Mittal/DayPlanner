@@ -10,8 +10,10 @@ import {
   Settings as SettingsIcon, User, Globe, Clock, Droplets, Bell,
   Palette, LogOut, Trash2, Loader2, Check, Sun, Moon, Monitor,
   Download, Upload, FileText, Sparkles, Compass, Target, Lightbulb, Smile, BookOpen, Briefcase,
-  Smartphone, Share2, PlusSquare
+  Smartphone, Share2, PlusSquare, Shield, Lock, Key, AlertCircle, Eye, EyeOff
 } from 'lucide-react';
+import { useCrypto } from '../contexts/CryptoContext';
+import { EncryptionSetupModal } from '../components/EncryptionSetupModal';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import { subscribeToPush, unsubscribeFromPush } from '../lib/push';
 import {
@@ -58,6 +60,32 @@ export const SettingsPage: React.FC = () => {
   const [personalisationEnabled, setPersonalisationEnabled] = useState<boolean>(true);
   const [triviaEnabled, setTriviaEnabled] = useState<boolean>(true);
 
+  // Encryption (E2EE)
+  const {
+    isEncryptionConfigured,
+    isUnlocked,
+    changePassphrase,
+    lock,
+    decryptDailyEntry,
+    decryptPrioritiesList,
+    decryptActionStepsList,
+    decryptMealsList,
+    decryptMedicationsList,
+    encryptDailyEntry,
+    encryptPrioritiesList,
+    encryptActionStepsList,
+    encryptMealsList,
+    encryptMedicationsList,
+  } = useCrypto();
+
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [showChangePassModal, setShowChangePassModal] = useState(false);
+  const [newPass, setNewPass] = useState('');
+  const [confirmNewPass, setConfirmNewPass] = useState('');
+  const [passError, setPassError] = useState<string | null>(null);
+  const [passSuccess, setPassSuccess] = useState<string | null>(null);
+  const [passLoading, setPassLoading] = useState(false);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
@@ -73,10 +101,28 @@ export const SettingsPage: React.FC = () => {
         .select('*, priorities(*), action_steps(*), meals(*), wind_down_items(*), medications(*)')
         .eq('user_id', user.id);
 
+      // Decrypt in browser RAM so the user's exported backup is readable and clear
+      const decryptedEntries = await Promise.all(
+        (entries || []).map(async (entry: any) => {
+          const dec = await decryptDailyEntry(entry);
+          const decP = await decryptPrioritiesList(entry.priorities || []);
+          const decA = await decryptActionStepsList(entry.action_steps || []);
+          const decM = await decryptMealsList(entry.meals || []);
+          const decMeds = await decryptMedicationsList(entry.medications || []);
+          return {
+            ...dec,
+            priorities: decP,
+            action_steps: decA,
+            meals: decM,
+            medications: decMeds,
+          };
+        })
+      );
+
       const backupData = {
         exported_at: new Date().toISOString(),
         user_id: user.id,
-        entries: entries || []
+        entries: decryptedEntries,
       };
 
       const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
@@ -112,7 +158,7 @@ export const SettingsPage: React.FC = () => {
             return;
           }
 
-          // Restore each entry and child rows
+          // Restore each entry and child rows (encrypting if encryption is active)
           for (const entry of backup.entries) {
             const entryId = entry.id;
 
@@ -120,25 +166,29 @@ export const SettingsPage: React.FC = () => {
             const { priorities, action_steps, meals, wind_down_items, medications, ...entryRow } = entry;
             entryRow.user_id = user.id;
 
-            const { error: entryErr } = await supabase.from('daily_entries').upsert(entryRow);
+            const encryptedRow = await encryptDailyEntry(entryRow);
+            const { error: entryErr } = await supabase.from('daily_entries').upsert(encryptedRow);
             if (entryErr) throw entryErr;
 
             // 2. Restore child relation rows
             if (Array.isArray(priorities) && priorities.length > 0) {
+              const encP = await encryptPrioritiesList(priorities);
               const { error: err } = await supabase.from('priorities').upsert(
-                priorities.map((p: any) => ({ ...p, daily_entry_id: entryId, user_id: user.id }))
+                encP.map((p: any) => ({ ...p, daily_entry_id: entryId, user_id: user.id }))
               );
               if (err) throw err;
             }
             if (Array.isArray(action_steps) && action_steps.length > 0) {
+              const encA = await encryptActionStepsList(action_steps);
               const { error: err } = await supabase.from('action_steps').upsert(
-                action_steps.map((a: any) => ({ ...a, daily_entry_id: entryId, user_id: user.id }))
+                encA.map((a: any) => ({ ...a, daily_entry_id: entryId, user_id: user.id }))
               );
               if (err) throw err;
             }
             if (Array.isArray(meals) && meals.length > 0) {
+              const encM = await encryptMealsList(meals);
               const { error: err } = await supabase.from('meals').upsert(
-                meals.map((m: any) => ({ ...m, daily_entry_id: entryId, user_id: user.id }))
+                encM.map((m: any) => ({ ...m, daily_entry_id: entryId, user_id: user.id }))
               );
               if (err) throw err;
             }
@@ -149,8 +199,9 @@ export const SettingsPage: React.FC = () => {
               if (err) throw err;
             }
             if (Array.isArray(medications) && medications.length > 0) {
+              const encMeds = await encryptMedicationsList(medications);
               const { error: err } = await supabase.from('medications').upsert(
-                medications.map((med: any) => ({ ...med, daily_entry_id: entryId, user_id: user.id }))
+                encMeds.map((med: any) => ({ ...med, daily_entry_id: entryId, user_id: user.id }))
               );
               if (err) throw err;
             }
@@ -991,6 +1042,196 @@ export const SettingsPage: React.FC = () => {
         <LogOut size={18} />
         Log Out
       </button>
+
+      {/* Private Mode (Zero-Knowledge End-to-End Encryption) */}
+      <section className="card space-y-4 border-amber-500/30 dark:border-amber-500/20">
+        <div className="flex items-center justify-between">
+          <h2 className="section-title text-text-primary dark:text-dark-text">
+            <Shield size={18} className="text-amber-500" />
+            Private Mode (End-to-End Encryption)
+          </h2>
+          {isEncryptionConfigured ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Active (AES-GCM-256)
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-surface-hover dark:bg-dark-surface text-text-muted border border-border-default dark:border-dark-border">
+              Inactive
+            </span>
+          )}
+        </div>
+
+        <p className="text-sm text-text-secondary dark:text-dark-text-secondary leading-relaxed">
+          {isEncryptionConfigured ? (
+            <>
+              Your personal thoughts, brain dumps, priorities, and notes are encrypted on your device before saving to the cloud. Even database administrators cannot read your reflections.
+            </>
+          ) : (
+            <>
+              Protect your daily journal with zero-knowledge envelope encryption. Your entries are scrambled in your browser using a master key wrapped by your secret passphrase and an offline recovery file.
+            </>
+          )}
+        </p>
+
+        {/* Mandatory Transparency & Disclosure Copy */}
+        <div className="p-3 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default dark:border-dark-border text-xs text-text-muted dark:text-dark-muted space-y-1">
+          <p className="font-semibold text-text-primary dark:text-dark-text">🔒 Privacy Disclosure:</p>
+          <p>
+            Your written reflections are fully encrypted. Mood scores and dates stay visible so your calendar and trend charts keep working — no written content is ever included in either.
+          </p>
+        </div>
+
+        {isEncryptionConfigured ? (
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setShowChangePassModal(true);
+                setPassError(null);
+                setPassSuccess(null);
+                setNewPass('');
+                setConfirmNewPass('');
+              }}
+              className="btn-secondary py-2.5 px-4 flex items-center gap-2 text-xs font-semibold"
+            >
+              <Key size={14} />
+              Change Passphrase
+            </button>
+            <button
+              type="button"
+              onClick={lock}
+              className="btn-ghost py-2.5 px-4 flex items-center gap-2 text-xs font-medium text-text-muted hover:text-text-primary"
+            >
+              <Lock size={14} />
+              Lock Session Now
+            </button>
+          </div>
+        ) : (
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setShowSetupModal(true)}
+              className="py-2.5 px-5 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold text-sm transition-all flex items-center gap-2 shadow-sm"
+            >
+              <Shield size={16} />
+              Enable Private Mode (Zero-Knowledge)
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* Setup Wizard Modal */}
+      <EncryptionSetupModal
+        isOpen={showSetupModal}
+        onClose={() => setShowSetupModal(false)}
+        onSuccess={() => setShowSetupModal(false)}
+      />
+
+      {/* Change Passphrase Modal */}
+      {showChangePassModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-md bg-card-bg dark:bg-dark-card border border-border-default dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                <Key className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-text-primary dark:text-dark-text">Change Passphrase</h3>
+                <p className="text-xs text-text-muted">Re-wraps your master key with zero data re-encryption</p>
+              </div>
+            </div>
+
+            {passError && (
+              <div className="p-3 rounded-xl bg-red-500/10 text-red-600 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{passError}</span>
+              </div>
+            )}
+
+            {passSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-600 text-xs flex items-center gap-2">
+                <Check className="w-4 h-4 flex-shrink-0" />
+                <span>{passSuccess}</span>
+              </div>
+            )}
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (newPass.length < 8) {
+                  setPassError('Passphrase must be at least 8 characters long.');
+                  return;
+                }
+                if (newPass !== confirmNewPass) {
+                  setPassError('Passphrases do not match.');
+                  return;
+                }
+                setPassLoading(true);
+                setPassError(null);
+                try {
+                  const ok = await changePassphrase(newPass);
+                  if (ok) {
+                    setPassSuccess('Passphrase updated successfully!');
+                    setTimeout(() => {
+                      setShowChangePassModal(false);
+                      setNewPass('');
+                      setConfirmNewPass('');
+                      setPassSuccess(null);
+                    }, 1600);
+                  } else {
+                    setPassError('Failed to change passphrase. Ensure your journal is unlocked.');
+                  }
+                } catch (err: any) {
+                  setPassError(err?.message || 'Failed to update.');
+                } finally {
+                  setPassLoading(false);
+                }
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-xs font-semibold mb-1">New Passphrase (min 8 chars)</label>
+                <input
+                  type="password"
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  placeholder="New passphrase"
+                  className="w-full px-4 py-2 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold mb-1">Confirm New Passphrase</label>
+                <input
+                  type="password"
+                  value={confirmNewPass}
+                  onChange={(e) => setConfirmNewPass(e.target.value)}
+                  placeholder="Repeat new passphrase"
+                  className="w-full px-4 py-2 rounded-xl bg-surface-hover dark:bg-dark-surface border border-border-default text-sm"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowChangePassModal(false)}
+                  className="btn-ghost flex-1 py-2 text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={passLoading || !newPass || !confirmNewPass}
+                  className="btn-primary flex-1 py-2 text-xs font-semibold flex items-center justify-center gap-2"
+                >
+                  {passLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Save Passphrase'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Backup and Export */}
       <section className="card space-y-4">

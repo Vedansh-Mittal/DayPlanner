@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/auth-store';
+import { useCrypto } from '../contexts/CryptoContext';
 import type {
   DailyEntry, Priority, ActionStep, Medication, Meal, WindDownItem,
   MealType, WindDownType,
@@ -172,6 +173,18 @@ export function deleteMedicationPreset(name: string) {
 
 export function useDailyEntry(dateStr: string) {
   const user = useAuthStore((s) => s.user);
+  const {
+    encryptDailyEntry,
+    decryptDailyEntry,
+    encryptPrioritiesList,
+    decryptPrioritiesList,
+    encryptActionStepsList,
+    decryptActionStepsList,
+    encryptMealsList,
+    decryptMealsList,
+    encryptMedicationsList,
+    decryptMedicationsList,
+  } = useCrypto();
 
   /* — State — */
   const [entryId, setEntryId] = useState<string | null>(null);
@@ -304,10 +317,17 @@ export function useDailyEntry(dateStr: string) {
     }
 
     if (data) {
-      setEntryId(data.id);
-      setEntryFields(extractFields(data));
+      // Decrypt loaded data in RAM
+      const decryptedData = await decryptDailyEntry(data);
+      const decryptedPriorities = await decryptPrioritiesList((decryptedData.priorities as Priority[]) || []);
+      const decryptedActions = await decryptActionStepsList((decryptedData.action_steps as ActionStep[]) || []);
+      const decryptedMeals = await decryptMealsList((decryptedData.meals as Meal[]) || []);
+      const decryptedMeds = await decryptMedicationsList((decryptedData.medications as Medication[]) || []);
+
+      setEntryId(decryptedData.id);
+      setEntryFields(extractFields(decryptedData));
       
-      const loadedPriorities = ((data.priorities as Priority[]) || []).sort((a, b) => a.sort_order - b.sort_order);
+      const loadedPriorities = decryptedPriorities.sort((a, b) => a.sort_order - b.sort_order);
       const normalizedP = [0, 1, 2].map((i) => {
         const found = loadedPriorities.find((p) => p.sort_order === i);
         return found ? { ...found } : { sort_order: i, text: null, completed: false };
@@ -315,7 +335,7 @@ export function useDailyEntry(dateStr: string) {
       prioritiesRef.current = normalizedP;
       setPriorities(normalizedP);
 
-      const loadedActions = ((data.action_steps as ActionStep[]) || []).sort((a, b) => a.sort_order - b.sort_order);
+      const loadedActions = decryptedActions.sort((a, b) => a.sort_order - b.sort_order);
       const normalizedA = [0, 1, 2, 3, 4].map((i) => {
         const found = loadedActions.find((a) => a.sort_order === i);
         return found ? { ...found } : { sort_order: i, text: null, completed: false };
@@ -324,10 +344,9 @@ export function useDailyEntry(dateStr: string) {
       setActionSteps(normalizedA);
 
       // Deduplicate loaded medications by name to clean up any past duplicate inserts
-      const rawMeds = (data.medications as Medication[]) || [];
       const seen = new Set<string>();
       const loadedMeds: Medication[] = [];
-      rawMeds
+      decryptedMeds
         .filter((m) => m && m.name && m.name.trim())
         .sort((a, b) => a.sort_order - b.sort_order)
         .forEach((m) => {
@@ -342,23 +361,23 @@ export function useDailyEntry(dateStr: string) {
       medicationsRef.current = loadedMeds;
 
       setMeals(
-        (data.meals as Meal[]).length > 0
-          ? (data.meals as Meal[])
+        decryptedMeals.length > 0
+          ? decryptedMeals
           : defaultMeals(),
       );
       setWindDownItems(
-        (data.wind_down_items as WindDownItem[]).length > 0
-          ? (data.wind_down_items as WindDownItem[])
+        ((decryptedData.wind_down_items as WindDownItem[]) || []).length > 0
+          ? (decryptedData.wind_down_items as WindDownItem[])
           : defaultWindDown(),
       );
 
       saveToLocalCache(
         dateStr,
-        extractFields(data),
+        extractFields(decryptedData),
         normalizedP,
         normalizedA,
-        data.meals || [],
-        data.wind_down_items || [],
+        decryptedMeals,
+        decryptedData.wind_down_items || [],
         loadedMeds
       );
     } else {
@@ -492,11 +511,12 @@ export function useDailyEntry(dateStr: string) {
       const morningCompleted = isMorningComplete(fields, prioritiesRef.current, actionStepsRef.current);
       const nightCompleted = isNightComplete(fields, mealsRef.current, windDownRef.current);
 
-      // 1. Upsert daily entry
+      // 1. Upsert daily entry (encrypted)
+      const encryptedFields = await encryptDailyEntry(fields);
       const entryPayload = {
         user_id: user.id,
         entry_date: targetDate,
-        ...fields,
+        ...encryptedFields,
         morning_completed: morningCompleted,
         night_completed: nightCompleted,
         updated_at: new Date().toISOString(),
@@ -520,7 +540,7 @@ export function useDailyEntry(dateStr: string) {
         night_completed: nightCompleted,
       }));
 
-      // 2. Upsert priorities
+      // 2. Upsert priorities (encrypted)
       const pRows = prioritiesRef.current.map((p: any, idx: number) => ({
         daily_entry_id: savedId,
         user_id: user.id,
@@ -528,9 +548,10 @@ export function useDailyEntry(dateStr: string) {
         text: p.text || null,
         completed: p.completed ?? false,
       }));
+      const encryptedPRows = await encryptPrioritiesList(pRows);
       const { data: pData } = await supabase
         .from('priorities')
-        .upsert(pRows, { onConflict: 'daily_entry_id,sort_order' })
+        .upsert(encryptedPRows, { onConflict: 'daily_entry_id,sort_order' })
         .select();
       if (pData) {
         pData.forEach((row: any) => {
@@ -541,7 +562,7 @@ export function useDailyEntry(dateStr: string) {
         });
       }
 
-      // 3. Upsert action steps
+      // 3. Upsert action steps (encrypted)
       const aRows = actionStepsRef.current.map((a: any, idx: number) => ({
         daily_entry_id: savedId,
         user_id: user.id,
@@ -549,9 +570,10 @@ export function useDailyEntry(dateStr: string) {
         text: a.text || null,
         completed: a.completed ?? false,
       }));
+      const encryptedARows = await encryptActionStepsList(aRows);
       const { data: aData } = await supabase
         .from('action_steps')
-        .upsert(aRows, { onConflict: 'daily_entry_id,sort_order' })
+        .upsert(encryptedARows, { onConflict: 'daily_entry_id,sort_order' })
         .select();
       if (aData) {
         aData.forEach((row: any) => {
@@ -562,7 +584,7 @@ export function useDailyEntry(dateStr: string) {
         });
       }
 
-      // 4. Upsert meals
+      // 4. Upsert meals (encrypted)
       const mRows = mealsRef.current.map((m: any) => ({
         daily_entry_id: savedId,
         user_id: user.id,
@@ -571,9 +593,10 @@ export function useDailyEntry(dateStr: string) {
         time: m.time || null,
         notes: m.notes || null,
       }));
+      const encryptedMRows = await encryptMealsList(mRows);
       const { data: mData } = await supabase
         .from('meals')
-        .upsert(mRows, { onConflict: 'daily_entry_id,meal_type' })
+        .upsert(encryptedMRows, { onConflict: 'daily_entry_id,meal_type' })
         .select();
       if (mData) {
         mData.forEach((row: any) => {
@@ -585,7 +608,7 @@ export function useDailyEntry(dateStr: string) {
         });
       }
 
-      // 5. Upsert wind down items
+      // 5. Upsert wind down items (metadata only, no private text)
       const wRows = windDownRef.current.map((w: any) => ({
         daily_entry_id: savedId,
         user_id: user.id,
@@ -606,7 +629,7 @@ export function useDailyEntry(dateStr: string) {
         });
       }
 
-      // 6. Sync medications: atomic replace for this day's entry
+      // 6. Sync medications: atomic replace for this day's entry (encrypted)
       const validMeds = medicationsRef.current.filter((m) => m && m.name && m.name.trim().length > 0);
       
       await supabase.from('medications').delete().eq('daily_entry_id', savedId);
@@ -624,9 +647,10 @@ export function useDailyEntry(dateStr: string) {
             taken: m.taken ?? false,
           };
         });
+        const encryptedMedRows = await encryptMedicationsList(medRows);
         const { data: medData } = await supabase
           .from('medications')
-          .insert(medRows)
+          .insert(encryptedMedRows)
           .select();
         if (medData) {
           medData.forEach((row: any) => {
@@ -724,12 +748,13 @@ export function useDailyEntry(dateStr: string) {
     if (entryIdRef.current) return entryIdRef.current;
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
+    const encryptedFields = await encryptDailyEntry(entryFieldsRef.current);
     const { data, error: err } = await supabase
       .from('daily_entries')
       .upsert({
         user_id: user!.id,
         entry_date: dateStr,
-        ...entryFieldsRef.current,
+        ...encryptedFields,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,entry_date' })
       .select()

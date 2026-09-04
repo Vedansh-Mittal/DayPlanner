@@ -11,6 +11,12 @@ export interface UserSettings {
   push_reminders_enabled: boolean;
   theme: 'light' | 'dark' | 'system';
   onboarding_complete: boolean;
+  /* Client-Side Encryption (E2EE) */
+  encryption_enabled?: boolean;
+  encryption_salt?: string | null;
+  wrapped_key_passphrase?: string | null;
+  wrapped_key_recovery?: string | null;
+  key_verifier?: string | null;
   created_at: string;
   updated_at: string;
 }
