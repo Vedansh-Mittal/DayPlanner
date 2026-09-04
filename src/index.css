@@ -31,11 +31,14 @@
   --color-text-muted: #9CA3AF;
   --color-border: #E5E0D8;
   --color-surface: #FFFFFF;
+  --color-surface-muted: #F8F5F0;
+  --color-card-bg: #FFFFFF;
 
   /* Dark palette */
   --color-dark-bg: #1a1a2e;
   --color-dark-surface: #232342;
   --color-dark-surface-raised: #2d2d52;
+  --color-dark-surface-muted: #1c1c38;
   --color-dark-card: #232342;
   --color-dark-card-raised: #2d2d52;
   --color-dark-border: #3d3d6b;

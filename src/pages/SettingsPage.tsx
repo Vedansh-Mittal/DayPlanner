@@ -1231,7 +1231,7 @@ export const SettingsPage: React.FC = () => {
       {/* 1. Export Options Modal (Plain, Encrypted, Both) */}
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-lg bg-card-bg dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-5">
+          <div className="relative w-full max-w-lg bg-surface dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-5">
             {/* Close button */}
             <button
               type="button"
@@ -1241,7 +1241,7 @@ export const SettingsPage: React.FC = () => {
                 setCustomPassword('');
                 setCurrentPasswordInput('');
               }}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface dark:hover:bg-dark-surface transition-colors"
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-cream-dark dark:hover:bg-dark-surface transition-colors"
               title="Close"
             >
               <X className="w-5 h-5" />
@@ -1249,14 +1249,14 @@ export const SettingsPage: React.FC = () => {
 
             {/* Header */}
             <div className="flex items-center space-x-3 pr-8">
-              <div className="w-10 h-10 rounded-xl bg-lavender/10 text-lavender-dark dark:text-lavender flex items-center justify-center font-bold shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-lavender/20 text-lavender-dark dark:text-lavender flex items-center justify-center font-bold shrink-0">
                 <Download className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-text-primary dark:text-dark-text">
                   Export Journal Backup
                 </h3>
-                <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                <p className="text-xs text-text-secondary dark:text-dark-text-secondary font-medium">
                   Choose your preferred backup format
                 </p>
               </div>
@@ -1270,22 +1270,22 @@ export const SettingsPage: React.FC = () => {
                 onClick={() => setExportFormat('plain')}
                 className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-start justify-between gap-3 ${
                   exportFormat === 'plain'
-                    ? 'border-lavender bg-lavender/5 dark:bg-lavender/10'
-                    : 'border-border dark:border-dark-border hover:border-lavender/40'
+                    ? 'border-lavender-dark dark:border-lavender bg-lavender/10 dark:bg-lavender/15'
+                    : 'border-border dark:border-dark-border bg-surface dark:bg-dark-surface/40 hover:border-lavender/50'
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <FileText className={`w-5 h-5 mt-0.5 shrink-0 ${exportFormat === 'plain' ? 'text-lavender' : 'text-text-muted'}`} />
+                  <FileText className={`w-5 h-5 mt-0.5 shrink-0 ${exportFormat === 'plain' ? 'text-lavender-dark dark:text-lavender' : 'text-text-muted'}`} />
                   <div>
                     <div className="text-sm font-bold text-text-primary dark:text-dark-text">
                       Plain Text JSON
                     </div>
-                    <div className="text-xs text-text-secondary dark:text-dark-text-secondary mt-0.5">
+                    <div className="text-xs text-text-secondary dark:text-dark-text-secondary mt-0.5 leading-relaxed">
                       Human-readable in any text editor. Does not require a password to restore.
                     </div>
                   </div>
                 </div>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-surface-muted dark:bg-dark-surface-muted text-text-muted shrink-0">
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-cream-dark dark:bg-dark-surface-muted text-text-secondary dark:text-dark-text-muted shrink-0">
                   Open Format
                 </span>
               </button>
@@ -1296,22 +1296,22 @@ export const SettingsPage: React.FC = () => {
                 onClick={() => setExportFormat('encrypted')}
                 className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-start justify-between gap-3 ${
                   exportFormat === 'encrypted'
-                    ? 'border-amber-500 bg-amber-500/5 dark:bg-amber-500/10'
-                    : 'border-border dark:border-dark-border hover:border-amber-500/40'
+                    ? 'border-amber-500 bg-amber-500/10 dark:bg-amber-500/15'
+                    : 'border-border dark:border-dark-border bg-surface dark:bg-dark-surface/40 hover:border-amber-500/50'
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <Lock className={`w-5 h-5 mt-0.5 shrink-0 ${exportFormat === 'encrypted' ? 'text-amber-500' : 'text-text-muted'}`} />
+                  <Lock className={`w-5 h-5 mt-0.5 shrink-0 ${exportFormat === 'encrypted' ? 'text-amber-600 dark:text-amber-400' : 'text-text-muted'}`} />
                   <div>
                     <div className="text-sm font-bold text-text-primary dark:text-dark-text">
                       Encrypted JSON
                     </div>
-                    <div className="text-xs text-text-secondary dark:text-dark-text-secondary mt-0.5">
+                    <div className="text-xs text-text-secondary dark:text-dark-text-secondary mt-0.5 leading-relaxed">
                       Scrambled with AES-256. Strictly requires your password to open or restore.
                     </div>
                   </div>
                 </div>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 font-extrabold shrink-0">
                   Max Security
                 </span>
               </button>
@@ -1322,22 +1322,22 @@ export const SettingsPage: React.FC = () => {
                 onClick={() => setExportFormat('both')}
                 className={`w-full text-left p-3.5 rounded-xl border-2 transition-all flex items-start justify-between gap-3 ${
                   exportFormat === 'both'
-                    ? 'border-emerald-500 bg-emerald-500/5 dark:bg-emerald-500/10'
-                    : 'border-border dark:border-dark-border hover:border-emerald-500/40'
+                    ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/15'
+                    : 'border-border dark:border-dark-border bg-surface dark:bg-dark-surface/40 hover:border-emerald-500/50'
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <Package className={`w-5 h-5 mt-0.5 shrink-0 ${exportFormat === 'both' ? 'text-emerald-500' : 'text-text-muted'}`} />
+                  <Package className={`w-5 h-5 mt-0.5 shrink-0 ${exportFormat === 'both' ? 'text-emerald-600 dark:text-emerald-400' : 'text-text-muted'}`} />
                   <div>
                     <div className="text-sm font-bold text-text-primary dark:text-dark-text">
                       Both Formats (Plain + Encrypted)
                     </div>
-                    <div className="text-xs text-text-secondary dark:text-dark-text-secondary mt-0.5">
+                    <div className="text-xs text-text-secondary dark:text-dark-text-secondary mt-0.5 leading-relaxed">
                       Downloads both files so you have an unencrypted copy and a secured vault copy.
                     </div>
                   </div>
                 </div>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-extrabold shrink-0">
                   Recommended
                 </span>
               </button>
@@ -1345,20 +1345,20 @@ export const SettingsPage: React.FC = () => {
 
             {/* Password input for Encrypted / Both options */}
             {(exportFormat === 'encrypted' || exportFormat === 'both') && (
-              <div className="p-3.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border/60 dark:border-dark-border/60 space-y-3">
+              <div className="p-3.5 rounded-xl bg-surface-muted dark:bg-dark-surface border border-border dark:border-dark-border space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <label className="block text-xs font-bold text-text-primary dark:text-dark-text">
                     Password for Encrypted Backup:
                   </label>
                   {isEncryptionConfigured && (
-                    <div className="inline-flex rounded-lg bg-surface dark:bg-dark-surface p-0.5 border border-border dark:border-dark-border text-[11px] font-semibold">
+                    <div className="inline-flex rounded-lg bg-surface dark:bg-dark-surface-raised p-0.5 border border-border dark:border-dark-border text-[11px] font-semibold">
                       <button
                         type="button"
                         onClick={() => setPasswordChoice('current')}
                         className={`px-2.5 py-1 rounded-md transition-all ${
                           passwordChoice === 'current'
-                            ? 'bg-lavender text-white font-bold shadow-xs'
-                            : 'text-text-muted hover:text-text-primary'
+                            ? 'bg-lavender-dark dark:bg-lavender text-white dark:text-dark-bg font-bold shadow-xs'
+                            : 'text-text-secondary dark:text-dark-text-secondary hover:text-text-primary dark:hover:text-dark-text'
                         }`}
                       >
                         Use Current Password
@@ -1368,8 +1368,8 @@ export const SettingsPage: React.FC = () => {
                         onClick={() => setPasswordChoice('custom')}
                         className={`px-2.5 py-1 rounded-md transition-all ${
                           passwordChoice === 'custom'
-                            ? 'bg-lavender text-white font-bold shadow-xs'
-                            : 'text-text-muted hover:text-text-primary'
+                            ? 'bg-lavender-dark dark:bg-lavender text-white dark:text-dark-bg font-bold shadow-xs'
+                            : 'text-text-secondary dark:text-dark-text-secondary hover:text-text-primary dark:hover:text-dark-text'
                         }`}
                       >
                         Set New Password
@@ -1381,11 +1381,11 @@ export const SettingsPage: React.FC = () => {
                 {/* Sub-view: Use Current Password */}
                 {isEncryptionConfigured && passwordChoice === 'current' ? (
                   cachedPassphrase ? (
-                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2.5">
-                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                    <div className="p-3 rounded-xl bg-emerald-500/15 dark:bg-emerald-950/40 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2.5">
+                      <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                       <div>
-                        <div className="font-bold">Using Current Journal Password</div>
-                        <div className="text-[11px] opacity-80 mt-0.5">
+                        <div className="font-bold text-emerald-900 dark:text-emerald-200">Using Current Journal Password</div>
+                        <div className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5 font-medium">
                           Your backup will be encrypted with the same password you use to unlock your notes.
                         </div>
                       </div>
@@ -1398,7 +1398,7 @@ export const SettingsPage: React.FC = () => {
                           value={currentPasswordInput}
                           onChange={(e) => setCurrentPasswordInput(e.target.value)}
                           placeholder="Confirm your current journal password"
-                          className="w-full px-3.5 py-2 pr-10 rounded-lg bg-surface dark:bg-dark-surface border border-border dark:border-dark-border text-xs text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                          className="w-full px-3.5 py-2 pr-10 rounded-lg bg-surface dark:bg-dark-surface border border-border dark:border-dark-border text-xs text-text-primary dark:text-dark-text placeholder:text-text-muted dark:placeholder:text-dark-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                         />
                         <button
                           type="button"
@@ -1408,7 +1408,7 @@ export const SettingsPage: React.FC = () => {
                           {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         </button>
                       </div>
-                      <p className="text-[11px] text-text-muted dark:text-dark-text-muted">
+                      <p className="text-[11px] text-text-secondary dark:text-dark-text-secondary">
                         Enter your active journal password to lock this backup copy.
                       </p>
                     </div>
@@ -1422,7 +1422,7 @@ export const SettingsPage: React.FC = () => {
                         value={customPassword}
                         onChange={(e) => setCustomPassword(e.target.value)}
                         placeholder="Enter a new password for this backup (min. 8 characters)"
-                        className="w-full px-3.5 py-2 pr-10 rounded-lg bg-surface dark:bg-dark-surface border border-border dark:border-dark-border text-xs text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                        className="w-full px-3.5 py-2 pr-10 rounded-lg bg-surface dark:bg-dark-surface border border-border dark:border-dark-border text-xs text-text-primary dark:text-dark-text placeholder:text-text-muted dark:placeholder:text-dark-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                       />
                       <button
                         type="button"
@@ -1432,7 +1432,7 @@ export const SettingsPage: React.FC = () => {
                         {showCustomPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
                     </div>
-                    <p className="text-[11px] text-text-muted dark:text-dark-text-muted">
+                    <p className="text-[11px] text-text-secondary dark:text-dark-text-secondary">
                       ⚠️ Anyone restoring this encrypted file will strictly need this new password.
                     </p>
                   </div>
@@ -1477,7 +1477,7 @@ export const SettingsPage: React.FC = () => {
                 {backingUp ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Preparing Backup...</span>
+                    <span>Preparing Download...</span>
                   </>
                 ) : (
                   <>
@@ -1494,7 +1494,7 @@ export const SettingsPage: React.FC = () => {
       {/* 2. Password Prompt Modal for Encrypted Backup Restore */}
       {pendingEncryptedBackup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-md bg-card-bg dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-4">
+          <div className="relative w-full max-w-md bg-surface dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-4">
             {/* Close button */}
             <button
               type="button"
@@ -1503,7 +1503,7 @@ export const SettingsPage: React.FC = () => {
                 setImportPassword('');
                 setImportPasswordError(null);
               }}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface dark:hover:bg-dark-surface transition-colors"
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-cream-dark dark:hover:bg-dark-surface transition-colors"
               title="Close"
             >
               <X className="w-5 h-5" />
@@ -1511,14 +1511,14 @@ export const SettingsPage: React.FC = () => {
 
             {/* Header */}
             <div className="flex items-center space-x-3 pr-8">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
                 <Lock className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-text-primary dark:text-dark-text">
                   Unlock Encrypted Backup
                 </h3>
-                <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                <p className="text-xs text-text-secondary dark:text-dark-text-secondary font-medium">
                   Protected with AES-256 Encryption
                 </p>
               </div>
@@ -1536,7 +1536,7 @@ export const SettingsPage: React.FC = () => {
                   onChange={(e) => setImportPassword(e.target.value)}
                   placeholder="Enter backup password"
                   autoFocus
-                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-xs text-text-primary dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-surface-muted dark:bg-dark-surface-raised border border-border dark:border-dark-border text-xs text-text-primary dark:text-dark-text placeholder:text-text-muted dark:placeholder:text-dark-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                 />
                 <button
                   type="button"
@@ -1593,12 +1593,12 @@ export const SettingsPage: React.FC = () => {
       {/* 3. Modal Prompting to Setup Encryption First */}
       {showSetupEncryptionPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-md bg-card-bg dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-4">
+          <div className="relative w-full max-w-md bg-surface dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-4">
             {/* Close button */}
             <button
               type="button"
               onClick={() => setShowSetupEncryptionPrompt(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface dark:hover:bg-dark-surface transition-colors"
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-cream-dark dark:hover:bg-dark-surface transition-colors"
               title="Close"
             >
               <X className="w-5 h-5" />
@@ -1606,14 +1606,14 @@ export const SettingsPage: React.FC = () => {
 
             {/* Header */}
             <div className="flex items-center space-x-3 pr-8">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
                 <Shield className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-text-primary dark:text-dark-text">
                   Enable Encryption First
                 </h3>
-                <p className="text-xs text-text-muted dark:text-dark-text-muted">
+                <p className="text-xs text-text-secondary dark:text-dark-text-secondary font-medium">
                   Encrypted Backup Detected
                 </p>
               </div>

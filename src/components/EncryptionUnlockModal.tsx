@@ -145,11 +145,11 @@ export const EncryptionUnlockModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-md bg-card-bg dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl">
+      <div className="relative w-full max-w-md bg-surface dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl">
         {/* Dismiss / Close Button */}
         <button
           onClick={handleClose}
-          className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface dark:hover:bg-dark-surface transition-colors"
+          className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-cream-dark dark:hover:bg-dark-surface transition-colors"
           title="Dismiss"
           aria-label="Close unlock modal"
         >
@@ -158,14 +158,14 @@ export const EncryptionUnlockModal: React.FC = () => {
 
         {/* Header Icon */}
         <div className="flex items-center space-x-3 mb-5 pr-8">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
             <Lock className="w-5 h-5" />
           </div>
           <div>
             <h2 className="text-lg font-bold text-text-primary dark:text-dark-text">
               {mode === 'reset-password' ? 'Set New Password' : 'Unlock Your Journal'}
             </h2>
-            <p className="text-xs text-text-muted dark:text-dark-muted">
+            <p className="text-xs text-text-secondary dark:text-dark-text-secondary font-medium">
               Zero-Knowledge End-to-End Encryption
             </p>
           </div>

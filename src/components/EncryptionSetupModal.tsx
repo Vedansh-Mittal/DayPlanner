@@ -107,12 +107,12 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg bg-card-bg dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl">
+      <div className="relative w-full max-w-lg bg-surface dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl">
         {/* Close Button */}
         {step !== 4 && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface dark:hover:bg-dark-surface"
+            className="absolute top-4 right-4 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-cream-dark dark:hover:bg-dark-surface"
           >
             <X className="w-4 h-4" />
           </button>
@@ -333,25 +333,25 @@ export const EncryptionSetupModal: React.FC<Props> = ({ isOpen, onClose, onSucce
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] text-text-muted mb-0.5">Segment #1 (4 letters)</label>
+                  <label className="block text-[10px] text-text-secondary dark:text-dark-text-secondary font-bold mb-0.5">Segment #1 (4 letters)</label>
                   <input
                     type="text"
                     maxLength={4}
                     value={challengeSeg1}
                     onChange={(e) => setChallengeSeg1(e.target.value.toUpperCase())}
                     placeholder="e.g. XKPQ"
-                    className="w-full px-3 py-1.5 rounded-lg bg-card-bg dark:bg-dark-card border border-border font-mono text-xs text-center uppercase text-text-primary dark:text-dark-text focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    className="w-full px-3 py-1.5 rounded-lg bg-surface dark:bg-dark-surface-raised border border-border dark:border-dark-border font-mono text-xs text-center uppercase text-text-primary dark:text-dark-text focus:outline-none focus:ring-1 focus:ring-amber-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-text-muted mb-0.5">Segment #3 (4 letters)</label>
+                  <label className="block text-[10px] text-text-secondary dark:text-dark-text-secondary font-bold mb-0.5">Segment #3 (4 letters)</label>
                   <input
                     type="text"
                     maxLength={4}
                     value={challengeSeg3}
                     onChange={(e) => setChallengeSeg3(e.target.value.toUpperCase())}
                     placeholder="e.g. 4B2M"
-                    className="w-full px-3 py-1.5 rounded-lg bg-card-bg dark:bg-dark-card border border-border font-mono text-xs text-center uppercase text-text-primary dark:text-dark-text focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    className="w-full px-3 py-1.5 rounded-lg bg-surface dark:bg-dark-surface-raised border border-border dark:border-dark-border font-mono text-xs text-center uppercase text-text-primary dark:text-dark-text focus:outline-none focus:ring-1 focus:ring-amber-500"
                   />
                 </div>
               </div>

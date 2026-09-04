@@ -182,26 +182,26 @@ export const SecurityPage: React.FC = () => {
       {/* Change Password Modal */}
       {showChangePassModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-md bg-card-bg dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+          <div className="relative w-full max-w-md bg-surface dark:bg-dark-card border border-border dark:border-dark-border rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3 pr-8">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
                 <Key className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-base font-bold text-text-primary dark:text-dark-text">Change Password</h3>
-                <p className="text-xs text-text-muted">Updates your encryption key password instantly</p>
+                <p className="text-xs text-text-secondary dark:text-dark-text-secondary font-medium">Updates your encryption key password instantly</p>
               </div>
             </div>
 
             {passError && (
-              <div className="p-3 rounded-xl bg-red-500/10 text-red-600 text-xs flex items-center gap-2">
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{passError}</span>
               </div>
             )}
 
             {passSuccess && (
-              <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-600 text-xs flex items-center gap-2">
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
                 <Check className="w-4 h-4 flex-shrink-0" />
                 <span>{passSuccess}</span>
               </div>
@@ -253,7 +253,7 @@ export const SecurityPage: React.FC = () => {
               />
 
               <div>
-                <label className="block text-xs font-semibold mb-1">New Password (min 8 chars)</label>
+                <label className="block text-xs font-bold text-text-primary dark:text-dark-text mb-1.5">New Password (min 8 chars)</label>
                 <div className="relative">
                   <input
                     id="security-new-password"
@@ -263,7 +263,7 @@ export const SecurityPage: React.FC = () => {
                     onChange={(e) => setNewPass(e.target.value)}
                     placeholder="Enter new password"
                     autoComplete="new-password"
-                    className="w-full px-4 py-2.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm"
+                    className="w-full px-4 py-2.5 rounded-xl bg-surface-muted dark:bg-dark-surface-raised border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text placeholder:text-text-muted dark:placeholder:text-dark-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                   />
                   <button
                     type="button"
@@ -276,7 +276,7 @@ export const SecurityPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1">Confirm New Password</label>
+                <label className="block text-xs font-bold text-text-primary dark:text-dark-text mb-1.5">Confirm New Password</label>
                 <input
                   id="security-confirm-password"
                   name="confirm-password"
@@ -285,7 +285,7 @@ export const SecurityPage: React.FC = () => {
                   onChange={(e) => setConfirmNewPass(e.target.value)}
                   placeholder="Repeat new password"
                   autoComplete="new-password"
-                  className="w-full px-4 py-2.5 rounded-xl bg-surface-muted dark:bg-dark-surface-muted border border-border dark:border-dark-border text-sm"
+                  className="w-full px-4 py-2.5 rounded-xl bg-surface-muted dark:bg-dark-surface-raised border border-border dark:border-dark-border text-sm text-text-primary dark:text-dark-text placeholder:text-text-muted dark:placeholder:text-dark-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                 />
               </div>
 
@@ -293,14 +293,14 @@ export const SecurityPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowChangePassModal(false)}
-                  className="btn-ghost flex-1 py-2 text-xs"
+                  className="btn-ghost flex-1 py-2 text-xs font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={passLoading || !newPass || !confirmNewPass}
-                  className="btn-primary flex-1 py-2 text-xs font-semibold flex items-center justify-center gap-2"
+                  className="btn-primary flex-1 py-2 text-xs font-bold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
                 >
                   {passLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Save Password'}
                 </button>
