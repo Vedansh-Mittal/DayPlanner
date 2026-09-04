@@ -22,6 +22,7 @@ import {
 import type { UserSettings } from '../types/database';
 
 const DEVICE_DEK_KEY = 'daylight_dek_device';
+const SESSION_UNLOCKED_KEY = 'daylight_session_unlocked';
 
 interface CryptoContextType {
   isEncryptionConfigured: boolean;
@@ -58,25 +59,32 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const settingsRef = useRef<UserSettings | null>(null);
 
-  // Save DEK on this device (localStorage) so user never has to unlock again on this phone/computer
+  // Save DEK in session storage for the current browser session (survives refreshes Cmd+R)
   const saveDekToDevice = async (key: CryptoKey, userId?: string) => {
     try {
       const raw = await crypto.subtle.exportKey('raw', key);
       const b64 = bufferToBase64(raw);
-      localStorage.setItem(DEVICE_DEK_KEY, b64);
-      if (userId) {
-        localStorage.setItem(`${DEVICE_DEK_KEY}_${userId}`, b64);
-      }
       sessionStorage.setItem(DEVICE_DEK_KEY, b64);
+      sessionStorage.setItem(SESSION_UNLOCKED_KEY, 'true');
+      if (userId) {
+        sessionStorage.setItem(`${DEVICE_DEK_KEY}_${userId}`, b64);
+      }
+      // Remove any lingering plaintext DEK from persistent localStorage
+      localStorage.removeItem(DEVICE_DEK_KEY);
+      if (userId) {
+        localStorage.removeItem(`${DEVICE_DEK_KEY}_${userId}`);
+      }
     } catch (e) {
-      console.warn('Failed to save DEK in device storage:', e);
+      console.warn('Failed to save DEK in session storage:', e);
     }
   };
 
   const clearDeviceDek = (userId?: string) => {
-    localStorage.removeItem(DEVICE_DEK_KEY);
     sessionStorage.removeItem(DEVICE_DEK_KEY);
+    sessionStorage.removeItem(SESSION_UNLOCKED_KEY);
+    localStorage.removeItem(DEVICE_DEK_KEY);
     if (userId) {
+      sessionStorage.removeItem(`${DEVICE_DEK_KEY}_${userId}`);
       localStorage.removeItem(`${DEVICE_DEK_KEY}_${userId}`);
     }
   };
@@ -86,9 +94,6 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!user) {
       setIsEncryptionConfigured(false);
       setDek(null);
-      // NOTE: DO NOT call clearDeviceDek() here!
-      // When page refreshes, user is briefly null while auth initializes asynchronously.
-      // Calling clearDeviceDek() here wiped the key on every refresh!
       setIsLoadingCrypto(false);
       return;
     }
@@ -112,13 +117,13 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (settings?.encryption_enabled && settings.wrapped_key_passphrase && settings.encryption_salt) {
         setIsEncryptionConfigured(true);
 
-        // Check if device already has the key stored (persistent across tab closes & refreshes)
+        // Check if this session was already unlocked (survives page refresh Cmd+R / F5)
+        const isSessionUnlocked = sessionStorage.getItem(SESSION_UNLOCKED_KEY) === 'true';
         const cachedRaw =
-          localStorage.getItem(`${DEVICE_DEK_KEY}_${user.id}`) ||
-          localStorage.getItem(DEVICE_DEK_KEY) ||
+          sessionStorage.getItem(`${DEVICE_DEK_KEY}_${user.id}`) ||
           sessionStorage.getItem(DEVICE_DEK_KEY);
 
-        if (cachedRaw) {
+        if (isSessionUnlocked && cachedRaw) {
           try {
             const rawBytes = base64ToBuffer(cachedRaw);
             const importedDek = await crypto.subtle.importKey(
@@ -138,7 +143,8 @@ export const CryptoProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
         }
 
-        // Encryption is enabled on account but this device is not yet unlocked
+        // Fresh login or locked session: ask user to enter/autofill password to decrypt!
+        setDek(null);
         setShowUnlockModal(true);
       } else {
         setIsEncryptionConfigured(false);

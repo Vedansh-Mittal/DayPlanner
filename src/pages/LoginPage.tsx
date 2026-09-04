@@ -28,6 +28,13 @@ export const LoginPage: React.FC = () => {
     if (authError) {
       setError(authError.message);
     } else {
+      try {
+        sessionStorage.removeItem('daylight_session_unlocked');
+        sessionStorage.removeItem('daylight_dek_device');
+        sessionStorage.removeItem('dayplanner_welcome_shown');
+      } catch (e) {
+        // ignore
+      }
       setSent(true);
     }
   };

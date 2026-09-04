@@ -19,6 +19,19 @@ export const AuthCallbackPage: React.FC = () => {
         }
 
         if (session) {
+          // Fresh magic link login: reset session unlock and welcome flags so user gets welcome + password prompt
+          try {
+            sessionStorage.removeItem('daylight_session_unlocked');
+            sessionStorage.removeItem('daylight_dek_device');
+            sessionStorage.removeItem('dayplanner_welcome_shown');
+            localStorage.removeItem('daylight_dek_device');
+            if (session.user?.id) {
+              localStorage.removeItem(`daylight_dek_device_${session.user.id}`);
+            }
+          } catch (e) {
+            // ignore
+          }
+
           // Check if user has completed onboarding
           const { data: settings } = await supabase
             .from('user_settings')

@@ -40,6 +40,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
+    try {
+      localStorage.removeItem('daylight_dek_device');
+      sessionStorage.removeItem('daylight_dek_device');
+      sessionStorage.removeItem('daylight_session_unlocked');
+      sessionStorage.removeItem('dayplanner_welcome_shown');
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('daylight_dek_device')) {
+          localStorage.removeItem(key);
+        }
+      }
+    } catch (e) {
+      console.warn('Error clearing encryption storage on signOut:', e);
+    }
     await supabase.auth.signOut();
     set({ session: null, user: null });
   },

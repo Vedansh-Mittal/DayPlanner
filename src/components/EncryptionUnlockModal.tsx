@@ -25,12 +25,22 @@ export const EncryptionUnlockModal: React.FC = () => {
   const [welcomeDismissed, setWelcomeDismissed] = useState(() => {
     return !!sessionStorage.getItem('dayplanner_welcome_shown');
   });
+  const passwordInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     const handleDismiss = () => setWelcomeDismissed(true);
     window.addEventListener('dayplanner_welcome_dismissed', handleDismiss);
     return () => window.removeEventListener('dayplanner_welcome_dismissed', handleDismiss);
   }, []);
+
+  React.useEffect(() => {
+    if (showUnlockModal && welcomeDismissed && mode === 'password') {
+      const timer = setTimeout(() => {
+        passwordInputRef.current?.focus();
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [showUnlockModal, welcomeDismissed, mode]);
 
   // Only show the unlock modal if encryption requires unlocking AND the welcome screen has already been dismissed!
   if (!showUnlockModal || !welcomeDismissed) return null;
@@ -197,6 +207,7 @@ export const EncryptionUnlockModal: React.FC = () => {
 
             <div className="relative">
               <input
+                ref={passwordInputRef}
                 id="unlock-password"
                 name="password"
                 type={showPassword ? 'text' : 'password'}
