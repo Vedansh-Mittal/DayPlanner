@@ -1,0 +1,61 @@
+name: CI / End-to-End & Integration Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    name: Run Playwright E2E & Type Checks
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+
+    env:
+      CI: true
+      VITE_SUPABASE_URL: https://example-project.supabase.co
+      VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.ci-dummy-anon-key
+      VITE_APP_URL: http://localhost:5173
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck and Build App
+        run: npm run build
+
+      - name: Install Playwright Browsers & OS Dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright End-to-End Tests
+        run: npx playwright test
+
+      - name: Upload Playwright Test Report Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Validate Postman API Collection Syntax
+        run: |
+          node -e "
+            const fs = require('fs');
+            const collection = JSON.parse(fs.readFileSync('postman/daylight-planner-api.postman_collection.json', 'utf8'));
+            if (!collection.info || !collection.item || collection.item.length === 0) {
+              console.error('Invalid Postman Collection format');
+              process.exit(1);
+            }
+            console.log('✅ Postman Collection valid:', collection.info.name, '(' + collection.item.length + ' folders)');
+          "
