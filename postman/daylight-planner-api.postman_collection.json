@@ -1,0 +1,625 @@
+{
+  "info": {
+    "_postman_id": "c71a3962-4f32-4e92-9519-758cf2c6d7a4",
+    "name": "Daylight Planner REST API",
+    "description": "Comprehensive Postman API Collection for Daylight Planner (Mewwmory).\n\nIncludes complete coverage for:\n- Supabase Authentication (Passwordless OTP / Magic Link, Session Management, Logout)\n- User Settings & Zero-Knowledge Client-Side Encryption Configuration\n- Daily Entries CRUD & Structured Reflections (Morning & Night)\n- Priorities, Action Steps, Meals, Medications, and Wind-down Items\n- Full-Text Search RPC (`search_entries`)\n- Serverless Edge Functions (`generate-insight`, `query-insights`, `send-reminders`)\n\n### Setup\n1. Select the `Daylight Planner (Local Dev)` environment.\n2. Ensure `baseUrl` (e.g. `http://localhost:54321` or `https://<project-ref>.supabase.co`) and `anonKey` are set.\n3. Run **1. Auth > Send OTP / Magic Link** followed by **Verify OTP** to automatically populate `authToken` and `userId` via test scripts.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "todayDate",
+      "value": "2026-10-02",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "description": "Supabase GoTrue Auth REST endpoints for passwordless authentication.",
+      "item": [
+        {
+          "name": "Send OTP / Magic Link",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"create_user\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/v1/otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "v1", "otp"]
+            },
+            "description": "Sends a 6-digit OTP code and magic link to the provided email address."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify OTP (Sets Auth Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.access_token) {",
+                  "    pm.environment.set(\"authToken\", jsonData.access_token);",
+                  "    pm.environment.set(\"refreshToken\", jsonData.refresh_token);",
+                  "}",
+                  "if (jsonData.user && jsonData.user.id) {",
+                  "    pm.environment.set(\"userId\", jsonData.user.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"token\": \"{{otpCode}}\",\n  \"type\": \"email\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/v1/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "v1", "verify"]
+            },
+            "description": "Verifies the 6-digit OTP token and returns user credentials and JWT access token."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Authenticated User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"User has ID\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.id).to.not.be.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/v1/user",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "v1", "user"]
+            },
+            "description": "Fetches currently authenticated user identity."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Session Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.environment.set(\"authToken\", json.access_token);",
+                  "    pm.environment.set(\"refreshToken\", json.refresh_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/v1/token?grant_type=refresh_token",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "v1", "token"],
+              "query": [{ "key": "grant_type", "value": "refresh_token" }]
+            },
+            "description": "Refreshes the expired JWT access token."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/v1/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "v1", "logout"]
+            },
+            "description": "Revokes current active session."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. User Settings & Security",
+      "description": "Endpoints to manage user preferences and zero-knowledge encryption keys.",
+      "item": [
+        {
+          "name": "Get User Settings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/user_settings?user_id=eq.{{userId}}&select=*",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "user_settings"],
+              "query": [
+                { "key": "user_id", "value": "eq.{{userId}}" },
+                { "key": "select", "value": "*" }
+              ]
+            },
+            "description": "Retrieves the user's settings, display name, reminder hours, and encryption flags."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Preferences (Theme, Water Goal)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Prefer", "value": "return=representation", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"display_name\": \"Vedansh\",\n  \"water_goal\": 8,\n  \"theme\": \"system\",\n  \"timezone\": \"Asia/Kolkata\",\n  \"onboarding_complete\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/user_settings?user_id=eq.{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "user_settings"],
+              "query": [{ "key": "user_id", "value": "eq.{{userId}}" }]
+            },
+            "description": "Updates non-security user profile preferences."
+          },
+          "response": []
+        },
+        {
+          "name": "Configure Zero-Knowledge Encryption (E2EE)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Prefer", "value": "return=representation", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"encryption_enabled\": true,\n  \"encryption_salt\": \"dGVzdHNhbHRleGFtcGxlMTI=\",\n  \"wrapped_key_passphrase\": \"4w7R8f09kLmP:a3b5c7d9e1f3...\",\n  \"wrapped_key_recovery\": \"8z9Y7x6W5v4U:c1d2e3f4a5b6...\",\n  \"key_verifier\": \"enc:v1:randomiv1234:canaryblob123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/user_settings?user_id=eq.{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "user_settings"],
+              "query": [{ "key": "user_id", "value": "eq.{{userId}}" }]
+            },
+            "description": "Enables Zero-Knowledge Envelope Encryption by storing client-side wrapped DEK blobs, salt, and canary verifier."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Daily Entries",
+      "description": "Daily entry reflection endpoints.",
+      "item": [
+        {
+          "name": "List Recent Entries (with Joined Children)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/daily_entries?user_id=eq.{{userId}}&select=*,priorities(*),action_steps(*),meals(*),medications(*),wind_down_items(*)&order=entry_date.desc&limit=14",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "daily_entries"],
+              "query": [
+                { "key": "user_id", "value": "eq.{{userId}}" },
+                { "key": "select", "value": "*,priorities(*),action_steps(*),meals(*),medications(*),wind_down_items(*)" },
+                { "key": "order", "value": "entry_date.desc" },
+                { "key": "limit", "value": "14" }
+              ]
+            },
+            "description": "Fetches recent daily entries with full relational graphs."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Single Entry by Date",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/daily_entries?user_id=eq.{{userId}}&entry_date=eq.{{todayDate}}&select=*,priorities(*),action_steps(*),meals(*),medications(*),wind_down_items(*)",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "daily_entries"],
+              "query": [
+                { "key": "user_id", "value": "eq.{{userId}}" },
+                { "key": "entry_date", "value": "eq.{{todayDate}}" },
+                { "key": "select", "value": "*,priorities(*),action_steps(*),meals(*),medications(*),wind_down_items(*)" }
+              ]
+            },
+            "description": "Fetches a specific day's complete planner entry."
+          },
+          "response": []
+        },
+        {
+          "name": "Create / Upsert Daily Entry",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    var entry = Array.isArray(json) ? json[0] : json;",
+                  "    if (entry && entry.id) {",
+                  "        pm.environment.set(\"entryId\", entry.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Prefer", "value": "resolution=merge-duplicates,return=representation", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{userId}}\",\n  \"entry_date\": \"{{todayDate}}\",\n  \"morning_mood\": \"Energized\",\n  \"morning_mood_intensity\": 4,\n  \"morning_motivations\": [\"Growth\", \"Impact\"],\n  \"morning_why\": \"Building resilient systems\",\n  \"morning_brain_dump\": \"Keep focus on priorities, clean execution\",\n  \"morning_inspire\": \"Progress over perfection\",\n  \"morning_completed\": true,\n  \"night_mood\": \"Grateful\",\n  \"night_mood_intensity\": 5,\n  \"night_gratitude_1\": \"Productive deep work flow\",\n  \"night_gratitude_2\": \"Crisp autumn sunshine\",\n  \"night_gratitude_3\": \"Finished all major roadmap items\",\n  \"night_win\": \"E2E test suite running 100% green\",\n  \"night_went_well\": \"Time management was flawless\",\n  \"night_improve\": \"Remember to stretch more during long sprints\",\n  \"night_brain_dump\": \"Ready for a sound sleep\",\n  \"night_intention\": \"Rest and recharge for tomorrow\",\n  \"water_count\": 6,\n  \"night_completed\": true,\n  \"daily_note\": \"Reflective journal entry\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/daily_entries",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "daily_entries"]
+            },
+            "description": "Upserts a daily entry on (user_id, entry_date) unique conflict."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Water Count & Quick Fields",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Prefer", "value": "return=representation", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"water_count\": 8\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/daily_entries?id=eq.{{entryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "daily_entries"],
+              "query": [{ "key": "id", "value": "eq.{{entryId}}" }]
+            },
+            "description": "Updates specific fields on an existing entry."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Daily Entry",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/daily_entries?id=eq.{{entryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "daily_entries"],
+              "query": [{ "key": "id", "value": "eq.{{entryId}}" }]
+            },
+            "description": "Deletes the daily entry row. Cascades to all child tables via PostgreSQL foreign keys."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Structured Habits & Sub-Items",
+      "description": "Relational child tables for granular daily tracking.",
+      "item": [
+        {
+          "name": "Upsert Top 3 Priorities",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Prefer", "value": "resolution=merge-duplicates,return=representation", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"daily_entry_id\": \"{{entryId}}\",\n    \"user_id\": \"{{userId}}\",\n    \"sort_order\": 0,\n    \"text\": \"Ship Playwright E2E test suites\",\n    \"completed\": true\n  },\n  {\n    \"daily_entry_id\": \"{{entryId}}\",\n    \"user_id\": \"{{userId}}\",\n    \"sort_order\": 1,\n    \"text\": \"Generate complete Postman collection\",\n    \"completed\": true\n  },\n  {\n    \"daily_entry_id\": \"{{entryId}}\",\n    \"user_id\": \"{{userId}}\",\n    \"sort_order\": 2,\n    \"text\": \"Configure GitHub Actions CI workflow\",\n    \"completed\": false\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/priorities",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "priorities"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Action Steps",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Prefer", "value": "resolution=merge-duplicates,return=representation", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"daily_entry_id\": \"{{entryId}}\",\n    \"user_id\": \"{{userId}}\",\n    \"sort_order\": 0,\n    \"text\": \"Review API requirements and auth flows\",\n    \"completed\": true\n  },\n  {\n    \"daily_entry_id\": \"{{entryId}}\",\n    \"user_id\": \"{{userId}}\",\n    \"sort_order\": 1,\n    \"text\": \"Run automated tests locally\",\n    \"completed\": true\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/action_steps",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "action_steps"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Meal Logs",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Prefer", "value": "resolution=merge-duplicates,return=representation", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"daily_entry_id\": \"{{entryId}}\",\n    \"user_id\": \"{{userId}}\",\n    \"meal_type\": \"breakfast\",\n    \"ate\": true,\n    \"time\": \"08:30\",\n    \"notes\": \"Oatmeal with almonds & blueberries\"\n  },\n  {\n    \"daily_entry_id\": \"{{entryId}}\",\n    \"user_id\": \"{{userId}}\",\n    \"meal_type\": \"lunch\",\n    \"ate\": true,\n    \"time\": \"13:15\",\n    \"notes\": \"Quinoa salad and grilled tofu\"\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/meals",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "meals"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Medications & Supplements",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Prefer", "value": "resolution=merge-duplicates,return=representation", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"daily_entry_id\": \"{{entryId}}\",\n    \"user_id\": \"{{userId}}\",\n    \"name\": \"Vitamin D3\",\n    \"dose\": \"1000 IU\",\n    \"time\": \"09:00\",\n    \"taken\": true,\n    \"sort_order\": 0\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/medications",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "medications"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Wind-Down Checklist",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Prefer", "value": "resolution=merge-duplicates,return=representation", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  { \"daily_entry_id\": \"{{entryId}}\", \"user_id\": \"{{userId}}\", \"item_type\": \"stretch\", \"completed\": true },\n  { \"daily_entry_id\": \"{{entryId}}\", \"user_id\": \"{{userId}}\", \"item_type\": \"drink_water\", \"completed\": true },\n  { \"daily_entry_id\": \"{{entryId}}\", \"user_id\": \"{{userId}}\", \"item_type\": \"read\", \"completed\": true },\n  { \"daily_entry_id\": \"{{entryId}}\", \"user_id\": \"{{userId}}\", \"item_type\": \"deep_breaths\", \"completed\": true },\n  { \"daily_entry_id\": \"{{entryId}}\", \"user_id\": \"{{userId}}\", \"item_type\": \"early_sleep\", \"completed\": false }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/wind_down_items",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "wind_down_items"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Search & RPC",
+      "description": "Full-text search RPC query.",
+      "item": [
+        {
+          "name": "Full-Text Search Across Entries",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"search_query\": \"priorities\",\n  \"p_user_id\": \"{{userId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/rest/v1/rpc/search_entries",
+              "host": ["{{baseUrl}}"],
+              "path": ["rest", "v1", "rpc", "search_entries"]
+            },
+            "description": "Searches daily entries and child items using PostgreSQL tsvector full-text index."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Serverless Edge Functions",
+      "description": "Custom Deno Edge Functions powering conversational reflection & push alerts.",
+      "item": [
+        {
+          "name": "Generate AI Reflection Insight",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"What themes have stood out in my morning reflections this week?\",\n  \"startDate\": \"2026-09-25\",\n  \"endDate\": \"2026-10-02\",\n  \"history\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/generate-insight",
+              "host": ["{{baseUrl}}"],
+              "path": ["functions", "v1", "generate-insight"]
+            },
+            "description": "Conversational reflection engine (Gemini / Claude API with anti-hallucination guardrails and hierarchical context scaling)."
+          },
+          "response": []
+        },
+        {
+          "name": "Query Insights (Deterministic Stats)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"How many times did I complete all top 3 priorities in the last 14 days?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/query-insights",
+              "host": ["{{baseUrl}}"],
+              "path": ["functions", "v1", "query-insights"]
+            },
+            "description": "Answers factual, numeric, and habit-based queries using deterministic pre-computed stats."
+          },
+          "response": []
+        },
+        {
+          "name": "Trigger Web Push Reminders (Cron / Manual)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anonKey}}", "type": "text" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"morning\",\n  \"testUserId\": \"{{userId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/functions/v1/send-reminders",
+              "host": ["{{baseUrl}}"],
+              "path": ["functions", "v1", "send-reminders"]
+            },
+            "description": "Dispatches RFC 8291 encrypted Web Push notifications to subscribed devices via VAPID."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
