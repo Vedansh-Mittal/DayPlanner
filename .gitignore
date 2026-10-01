@@ -4,6 +4,8 @@ dist
 .env.local
 *.local
 *.tsbuildinfo
+test-results/
+playwright-report/
 
 # Research & Academic Paper Artifacts
 *.docx
